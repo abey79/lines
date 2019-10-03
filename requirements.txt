@@ -1,0 +1,13 @@
+# Base requirements
+numpy
+shapely[vectorized]
+svgwrite
+
+# Testing requirements
+pytest
+
+# Examples requirements
+matplotlib
+
+# Dev/test requirements
+black
