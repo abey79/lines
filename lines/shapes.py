@@ -18,6 +18,8 @@ class Shape:
     class is thus mostly useful as a base class.
     """
 
+    # TODO: integrate Transform into shape for a cleaner API
+
     def transform(self, t: Union[np.ndarray, Transform, Sequence[Sequence[float]]]) -> None:
         """
         :param t: Transform object or 4x4 array of float
@@ -63,8 +65,8 @@ class PolyShape(Shape):
         self._vertices = np.hstack(
             (np.array(vertices, dtype=np.double), np.ones((len(vertices), 1)))
         )
-        self._segments = np.array(segments, dtype=np.uint32)
-        self._faces = np.array(faces, dtype=np.uint32)
+        self._segments = np.reshape(np.array(segments, dtype=np.uint32), (len(segments), 2))
+        self._faces = np.reshape(np.array(faces, dtype=np.uint32), (len(faces), 3))
 
     def _apply_transform(self, m: np.ndarray) -> None:
         new_vertices = np.empty_like(self._vertices)
@@ -90,7 +92,11 @@ class Cube(PolyShape):
 
 
 class OBJShape(PolyShape):
-    pass
+    """
+    PolyShape whose content is loaded from an .OBJ file.
+    """
+
+    # TODO
 
 
 class Sphere(Shape):
@@ -98,3 +104,15 @@ class Sphere(Shape):
     Spheres are projected first before lines and masking polygons can be created, in order to
     properly render the silhouette.
     """
+
+    # TODO
+
+
+class Node(Shape):
+    """
+    Empty shape that does not generate any geometry but contains other shapes, permitting the
+    construction of a scene graph. The node transform matrix are passed on their children
+    shapes.
+    """
+
+    # TODO
