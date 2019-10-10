@@ -2,6 +2,7 @@ from typing import Sequence, Tuple, Union
 
 import numpy as np
 
+from .math import vertices_matmul
 from .transform import Transform
 
 
@@ -69,12 +70,7 @@ class PolyShape(Shape):
         self._faces = np.reshape(np.array(faces, dtype=np.uint32), (len(faces), 3))
 
     def _apply_transform(self, m: np.ndarray) -> None:
-        new_vertices = np.empty_like(self._vertices)
-
-        # TODO: this loop can most def be optimized with numpy
-        for i in range(len(self._vertices)):
-            new_vertices[i] = m @ self._vertices[i]
-        self._vertices = new_vertices
+        self._vertices = vertices_matmul(self._vertices, m)
 
     def compile(self) -> Tuple[np.ndarray, np.ndarray]:
         return self._vertices[self._segments], self._vertices[self._faces]

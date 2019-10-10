@@ -5,7 +5,13 @@ import numpy as np
 import shapely.ops
 from shapely.geometry import MultiLineString, Polygon
 
-from lines.math import vertices_matmul
+from lines.math import (
+    vertices_matmul,
+    segments_parallel_to_face,
+    ParallelType,
+    mask_segments,
+    split_segments,
+)
 from .shapes import Shape
 
 
@@ -49,11 +55,13 @@ class Scene:
         t2 = r - l
         t3 = t - b
         t4 = f - n
+        # Note: the 3rd line of the matrix has opposite sign w.r.t the ln project, in order
+        # to maintain positive Z values for geometries closer to the camera
         frustum_matrix = np.array(
             [
                 [t1 / t2, 0, (r + l) / t2, 0],
                 [0, t1 / t3, (t + b) / t3, 0],
-                [0, 0, (-f - n) / t4, (-t1 * f) / t4],
+                [0, 0, (f + n) / t4, (t1 * f) / t4],
                 [0, 0, -1, 0],
             ]
         )
@@ -82,33 +90,76 @@ class Scene:
         all_segments = np.vstack(segment_set)
         all_faces = np.vstack(face_set)
 
-        #####TODO!!!!! Camera matrix must be passed to compile directely
-        #####otherwise non-PolyShape cannot have a chance to adjust their model before
-        #####producing the segments/faces
-
         # (B) Project everything with the camera matrix and convert to regular coordinates
-        proj_segments = vertices_matmul(all_segments, self._camera_matrix)
+        # TODO!!!!! Camera matrix must be passed to compile directly
+        # otherwise non-PolyShape cannot have a chance to adjust their model before
+        # producing the segments/faces
 
+        # Prepare all segments
+        proj_segments = vertices_matmul(all_segments, self._camera_matrix)
         all_segments = np.divide(
             proj_segments[:, :, 0:3], np.tile(proj_segments[:, :, -1:], (1, 1, 3))
         )
 
-        # (C) Process all face/segment occlusion
+        # Crop anything that is not in the frustum
+        # TODO: should also crop in the Z-direction
+        all_segments = mask_segments(
+            all_segments, np.array(((-1, -1), (-1, 1), (1, 1), (1, -1))), False
+        )
 
-        # For each face/segment combination, the following steps are done:
-        # (1) Check if segment and face are parallel
-        #     -> Segment contained in face plan -> unmasked
-        #     -> Segment in front of face plan -> unmasked
-        #     -> Segment behind the face plan -> to be masked
+        # Prepare all faces
+        proj_faces = vertices_matmul(all_faces, self._camera_matrix)
+        all_faces = np.divide(proj_faces[:, :, 0:3], np.tile(proj_faces[:, :, -1:], (1, 1, 3)))
+
+        # (C) Process all face/segment occlusion
         #
-        # (2) Segment is not parallel, split it at plan intersection
+        # (0) Apply view matrix
+        #
+        # (1) Face parallel to camera ray (n.z == 0)
+        #     -> all segments -> unmasked
+        #
+        # (2) Segment and face are parallel
+        #     -> segment contained in face plan -> unmasked
+        #     -> segment in front of face plan -> unmasked
+        #     -> segment behind the face plan -> to be masked
+        #
+        # (3) Segment is not parallel, split it at plan intersection
         #     -> half segment in front -> unmasked
         #     -> half segment behind -> to be masked
         #
-        # (3) All (sub-)segment flagged as to be masked are... masked with face.
+        # (4) Apply projection matrix
+        #
+        # (5) All (sub-)segment flagged as to be masked are... masked with face.
 
-        for p0, p1, p2 in all_faces:
-            print(p1, p2, p0)
+        face_normals = np.cross(
+            all_faces[:, 1] - all_faces[:, 0], all_faces[:, 2] - all_faces[:, 0]
+        )
+        non_perp_idx = face_normals[:, 2] != 0  # TODO: epsilon?
+
+        for (p0, p1, p2), n in zip(all_faces[non_perp_idx], face_normals[non_perp_idx]):
+            para = segments_parallel_to_face(all_segments, p0, n)
+
+            idx_masked, = np.where(para == ParallelType.PARALLEL_BACK.value)
+            idx_unmasked, = np.where(
+                np.logical_or(
+                    para == ParallelType.PARALLEL_FRONT.value,
+                    para == ParallelType.PARALLEL_COINCIDENT.value,
+                )
+            )
+            idx_split, = np.where(para == ParallelType.NOT_PARALLEL.value)
+
+            # Split the required segments in halves.
+            segs_front, segs_back = split_segments(all_segments[idx_split], p0, n)
+
+            # Mask everything that needs to be
+            masked_segments = mask_segments(
+                np.vstack([all_segments[idx_masked], segs_back]),
+                np.array([p0[0:2], p1[0:2], p2[0:2]]),
+                True,
+            )
+
+            # Collect all segments
+            all_segments = np.vstack([all_segments[idx_unmasked], segs_front, masked_segments])
 
         # (D) Crop to camera view
         segments_2d = all_segments[:, :, 0:2]
@@ -119,6 +170,6 @@ class Scene:
         # (E) Convert to 2D data and  merge line strings
         tot_seg_count = len(mls)
         segments_optimized = shapely.ops.linemerge(mls)
-        #segments_optimized = mls
+        # segments_optimized = mls
         print(f"Seg count: {tot_seg_count}, optimized seg count: {len(segments_optimized)}")
         return segments_optimized
