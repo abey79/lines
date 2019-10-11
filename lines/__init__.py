@@ -1,3 +1,3 @@
 from .scene import Scene
-from .shapes import Shape, PolyShape, Cube
-from .transform import Transform
+from .shapes import Shape
+from .poly_shapes import PolyShape, Cube

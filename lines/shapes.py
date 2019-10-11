@@ -1,9 +1,7 @@
+import math
 from typing import Sequence, Tuple, Union
 
 import numpy as np
-
-from .math import vertices_matmul
-from .transform import Transform
 
 
 class Shape:
@@ -12,30 +10,113 @@ class Shape:
     A Shape instance models a single 3D object and allows the user to act upon it in the
     following ways:
     - Apply transforms on the object (scaling, rotation, translation).
-    - Compile the object into 3D segments and faces that can subsequently be used for occlusion
-    computation and final projection to 2D.
+    - Compile the object into 3D segments and faces according to a camera projection matrix.
 
-    Instances of the Shape class are valid, but compile into empty segment/face sets. The Shape
-    class is thus mostly useful as a base class.
+    Instances of the Shape class are valid, but compile into empty segment/face sets.
     """
 
-    # TODO: integrate Transform into shape for a cleaner API
+    def __init__(
+        self,
+        scale: Union[float, Sequence[float]] = None,
+        rotate_x: float = None,
+        rotate_y: float = None,
+        rotate_z: float = None,
+        translate: Sequence[float] = None,
+    ):
+        """
+        Initialize a Shape with a default transform matrix. If parameters are passed, the
+        corresponding transform a applied. If multiple parameters are passed, the transforms
+        are applied in the order listed here:
+        :param scale: scale of the the shape (provide a 3-tuple for per axis scaling)
+        :param rotate_x: rotation around x axis (rad)
+        :param rotate_y: rotation around y axis (rad)
+        :param rotate_z: rotation around z axis (rad)
+        :param translate: translation
+        """
+        self.transform = np.identity(4)
+        if scale is not None:
+            self.scale(scale)
+        if rotate_x is not None:
+            self.rotate_x(rotate_x)
+        if rotate_y is not None:
+            self.rotate_y(rotate_y)
+        if rotate_z is not None:
+            self.rotate_z(rotate_z)
+        if translate is not None:
+            self.translate(translate)
 
-    def transform(self, t: Union[np.ndarray, Transform, Sequence[Sequence[float]]]) -> None:
-        """
-        :param t: Transform object or 4x4 array of float
-        """
-        if type(t) == Transform:
-            m = t.get()
-        else:
-            m = np.array(t)
-        self._apply_transform(m)
+    @property
+    def transform(self) -> np.ndarray:
+        return self.__transform
 
-    def _apply_transform(self, m: np.ndarray) -> None:
+    @transform.setter
+    def transform(self, transform: np.ndarray) -> None:
+        self.__transform = transform
+
+    def scale(
+        self,
+        x: Union[float, Sequence[float]],
+        y: Union[float, None] = None,
+        z: Union[float, None] = None,
+    ) -> None:
+        try:
+            if y is None or z is None:
+                # noinspection PyBroadException
+                try:
+                    scale_vec = [x[0], x[1], x[2]]
+                except:
+                    scale_vec = [float(x)] * 3
+            else:
+                scale_vec = [float(x), float(y), float(z)]
+        except Exception as exc:
+            raise ValueError(
+                "Argument may be one float, one size-3 sequence or 3 floats"
+            ) from exc
+
+        for i in range(3):
+            self.__transform[i][i] *= scale_vec[i]
+
+    def rotate_x(self, angle: float) -> None:
+        s, c = math.sin(angle), math.cos(angle)
+        r = np.array(([1, 0, 0, 0], [0, c, s, 0], [0, -s, c, 0], [0, 0, 0, 1]))
+        self.__transform = r @ self.__transform
+
+    def rotate_y(self, angle: float) -> None:
+        s, c = math.sin(angle), math.cos(angle)
+        r = np.array(([c, 0, s, 0], [0, 1, 0, 0], [-s, 0, c, 0], [0, 0, 0, 1]))
+        self.__transform = r @ self.__transform
+
+    def rotate_z(self, angle: float) -> None:
+        s, c = math.sin(angle), math.cos(angle)
+        r = np.array(([c, s, 0, 0], [-s, c, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]))
+        self.__transform = r @ self.__transform
+
+    def translate(
+        self,
+        x: Union[Sequence[float], float],
+        y: Union[float, None] = None,
+        z: Union[float, None] = None,
+    ) -> None:
         """
-        Apply the homogeneous transformation matrix m to the the shape.
-        :param m: 4x4 homogeneous transformation matrix
+        Apply a translation to the current transform. Either one 3-tuple or 3 float can be
+        passed as arguments.
+        :param x: either a 3-tuple of coordinate or the x coordinate
+        :param y: y coordinate
+        :param z: z coordinate
         """
+        try:
+            if y is None or z is None:
+                v_x, v_y, v_z = float(x[0]), float(x[1]), float(x[2])
+            else:
+                v_x, v_y, v_z = float(x), float(y), float(z)
+        except Exception as exc:
+            raise ValueError(
+                "Argument must be either one vector or three coordinates"
+            ) from exc
+
+        self.__transform[0][3] += v_x
+        self.__transform[1][3] += v_y
+        self.__transform[2][3] += v_z
 
     # noinspection PyMethodMayBeStatic
     def compile(self, camera_matrix: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
@@ -51,61 +132,6 @@ class Shape:
 
         # return nothing
         return np.zeros(shape=(0, 2, 3)), np.zeros(shape=(0, 3, 3))
-
-
-class PolyShape(Shape):
-    """
-    PolyShape is a base class for any Shape made of segments and polygonal masks, such as
-    cubes, OBJ-based models, etc. Here, no abstract shape is used before compilation.
-    """
-
-    def __init__(
-        self,
-        vertices: Sequence[Tuple[float, float, float]],
-        segments: Sequence[Tuple[int, int]],
-        faces: Sequence[Tuple[int, int, int]],
-    ):
-        """
-        :param vertices: [Nx3] floats
-        :param segments: [Mx2] uint indices
-        :param faces: [Px3] uint indices
-        """
-        # Store vertices in homogeneous coordinate
-        self._vertices = np.hstack(
-            (np.array(vertices, dtype=np.double), np.ones((len(vertices), 1)))
-        )
-        self._segments = np.reshape(np.array(segments, dtype=np.uint32), (len(segments), 2))
-        self._faces = np.reshape(np.array(faces, dtype=np.uint32), (len(faces), 3))
-
-    def _apply_transform(self, m: np.ndarray) -> None:
-        self._vertices = vertices_matmul(self._vertices, m)
-
-    def compile(self, camera_matrix: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-        # Project vertices to camera space and normalise to 3D
-        vertices = vertices_matmul(self._vertices, camera_matrix)
-        vertices = np.divide(vertices[:, 0:3], np.tile(vertices[:, -1:], (1, 3)))
-
-        # Return segments and faces
-        return vertices[self._segments], vertices[self._faces]
-
-
-class Cube(PolyShape):
-    """
-    This shape represent a cube centered on (0, 0, 0) with unit side length
-    """
-
-    def __init__(self):
-        from .tables import CUBE_VERTICES, CUBE_SEGMENTS, CUBE_FACES
-
-        super().__init__(CUBE_VERTICES, CUBE_SEGMENTS, CUBE_FACES)
-
-
-class OBJShape(PolyShape):
-    """
-    PolyShape whose content is loaded from an .OBJ file.
-    """
-
-    # TODO
 
 
 class Sphere(Shape):
