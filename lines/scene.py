@@ -6,7 +6,6 @@ import shapely.ops
 from shapely.geometry import MultiLineString, asMultiLineString
 
 from lines.math import (
-    vertices_matmul,
     segments_parallel_to_face,
     ParallelType,
     mask_segments,
@@ -79,38 +78,25 @@ class Scene:
         shapely.geometry.MultiLineString object containing all the visible 2D segment
         :return: the rendered 2D lines
         """
-        # (A) Gather all segments and all faces
+
+        # (A) Gather all segments and all faces, projected in camera space by Shape.compile()
 
         segment_set = []
         face_set = []
         for shape in self._shapes:
-            segments, faces = shape.compile()
+            segments, faces = shape.compile(self._camera_matrix)
             segment_set.append(segments)
             face_set.append(faces)
 
         all_segments = np.vstack(segment_set)
         all_faces = np.vstack(face_set)
 
-        # (B) Project everything with the camera matrix and convert to regular coordinates
-        # TODO!!!!! Camera matrix must be passed to compile directly
-        # otherwise non-PolyShape cannot have a chance to adjust their model before
-        # producing the segments/faces
-
-        # Prepare all segments
-        proj_segments = vertices_matmul(all_segments, self._camera_matrix)
-        all_segments = np.divide(
-            proj_segments[:, :, 0:3], np.tile(proj_segments[:, :, -1:], (1, 1, 3))
-        )
-
-        # Crop anything that is not in the frustum
+        # (B) Crop anything that is not in the frustum
         # TODO: should also crop in the Z-direction
+
         all_segments = mask_segments(
             all_segments, np.array(((-1, -1), (-1, 1), (1, 1), (1, -1))), False
         )
-
-        # Prepare all faces
-        proj_faces = vertices_matmul(all_faces, self._camera_matrix)
-        all_faces = np.divide(proj_faces[:, :, 0:3], np.tile(proj_faces[:, :, -1:], (1, 1, 3)))
 
         # (C) Process all face/segment occlusion as follows:
         #

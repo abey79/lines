@@ -38,10 +38,18 @@ class Shape:
         """
 
     # noinspection PyMethodMayBeStatic
-    def compile(self) -> Tuple[np.ndarray, np.ndarray]:
+    def compile(self, camera_matrix: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """
+        Subclass must implement this method to compile it into a set of 3D segments and faces
+        in camera space. The following steps are typically applied:
+        - the shape's transform matrix is applied
+        - the geometry is projected to camera space with camera_matrix
+        - a list of segment and face is generated
+        :param camera_matrix: (4x4) camera view and projection matrix
         :return: ([Nx2x3] ndarray of segments, [Mx3x3] ndarray of triangles
         """
+
+        # return nothing
         return np.zeros(shape=(0, 2, 3)), np.zeros(shape=(0, 3, 3))
 
 
@@ -72,8 +80,13 @@ class PolyShape(Shape):
     def _apply_transform(self, m: np.ndarray) -> None:
         self._vertices = vertices_matmul(self._vertices, m)
 
-    def compile(self) -> Tuple[np.ndarray, np.ndarray]:
-        return self._vertices[self._segments], self._vertices[self._faces]
+    def compile(self, camera_matrix: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        # Project vertices to camera space and normalise to 3D
+        vertices = vertices_matmul(self._vertices, camera_matrix)
+        vertices = np.divide(vertices[:, 0:3], np.tile(vertices[:, -1:], (1, 3)))
+
+        # Return segments and faces
+        return vertices[self._segments], vertices[self._faces]
 
 
 class Cube(PolyShape):
