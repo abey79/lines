@@ -1,7 +1,13 @@
 import numpy as np
 import pytest
 
-from lines.math import vertices_matmul, segments_parallel_to_face, ParallelType, mask_segments
+from lines.math import (
+    vertices_matmul,
+    segments_parallel_to_face,
+    ParallelType,
+    mask_segments,
+    segments_outside_triangle_2d,
+)
 from lines.tables import CUBE_VERTICES, CUBE_SEGMENTS, CUBE_FACES
 
 
@@ -79,6 +85,28 @@ def test_vertices_matmul_three_dimensions():
     for i in range(len(faces)):
         for j in range(3):
             assert np.all(o_faces[i][j] == m @ faces[i][j])
+
+
+def test_segments_outside_triangle_2d():
+    seg = np.array(
+        [
+            [(0.2, 0.2), (5, 5)],
+            [(0.2, 0.2), (0.2, -5)],
+            [(0.2, 0.2), (-5, 0.2)],
+            [(0.2, 0.2), (0.3, 0.3)],
+            [(0.2, -5), (0.8, -5)],
+            [(10, 10), (10.1, 10.1)],
+            [(-1, 5), (0.5, 10)],
+            [(0.2, 5), (0.2, -5)],
+        ]
+    )
+
+    assert np.all(
+        np.equal(
+            segments_outside_triangle_2d(seg, np.array([(0, 0), (1, 0), (0, 1)])),
+            np.array([False, False, False, False, True, True, True, False]),
+        )
+    )
 
 
 def test_segments_parallel_to_face_single_segment():

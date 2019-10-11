@@ -3,7 +3,7 @@ from typing import Sequence
 
 import numpy as np
 import shapely.ops
-from shapely.geometry import MultiLineString, Polygon
+from shapely.geometry import MultiLineString, asMultiLineString
 
 from lines.math import (
     vertices_matmul,
@@ -11,6 +11,7 @@ from lines.math import (
     ParallelType,
     mask_segments,
     split_segments,
+    segments_outside_triangle_2d,
 )
 from .shapes import Shape
 
@@ -111,33 +112,37 @@ class Scene:
         proj_faces = vertices_matmul(all_faces, self._camera_matrix)
         all_faces = np.divide(proj_faces[:, :, 0:3], np.tile(proj_faces[:, :, -1:], (1, 1, 3)))
 
-        # (C) Process all face/segment occlusion
-        #
-        # (0) Apply view matrix
+        # (C) Process all face/segment occlusion as follows:
         #
         # (1) Face parallel to camera ray (n.z == 0)
         #     -> all segments -> unmasked
         #
-        # (2) Segment and face are parallel
+        # (2) If the 2D projected segment does not intersect the face
+        #     -> unmasked
+        #
+        # (3) Segment and face are parallel
         #     -> segment contained in face plan -> unmasked
         #     -> segment in front of face plan -> unmasked
         #     -> segment behind the face plan -> to be masked
         #
-        # (3) Segment is not parallel, split it at plan intersection
+        # (4) Segment is not parallel, split it at plan intersection
         #     -> half segment in front -> unmasked
         #     -> half segment behind -> to be masked
-        #
-        # (4) Apply projection matrix
         #
         # (5) All (sub-)segment flagged as to be masked are... masked with face.
 
         face_normals = np.cross(
             all_faces[:, 1] - all_faces[:, 0], all_faces[:, 2] - all_faces[:, 0]
         )
-        non_perp_idx = face_normals[:, 2] != 0  # TODO: epsilon?
+        non_perp_idx = face_normals[:, 2] != 0
 
         for (p0, p1, p2), n in zip(all_faces[non_perp_idx], face_normals[non_perp_idx]):
-            para = segments_parallel_to_face(all_segments, p0, n)
+            # All segments strictly outside of the face (in 2D) can be left alone
+            outside = segments_outside_triangle_2d(all_segments, np.array([p0, p1, p2]))
+            segments_to_process = all_segments[~outside]
+
+            # Check parallelism
+            para = segments_parallel_to_face(segments_to_process, p0, n)
 
             idx_masked, = np.where(para == ParallelType.PARALLEL_BACK.value)
             idx_unmasked, = np.where(
@@ -149,27 +154,28 @@ class Scene:
             idx_split, = np.where(para == ParallelType.NOT_PARALLEL.value)
 
             # Split the required segments in halves.
-            segs_front, segs_back = split_segments(all_segments[idx_split], p0, n)
+            segs_front, segs_back = split_segments(segments_to_process[idx_split], p0, n)
 
             # Mask everything that needs to be
             masked_segments = mask_segments(
-                np.vstack([all_segments[idx_masked], segs_back]),
+                np.vstack([segments_to_process[idx_masked], segs_back]),
                 np.array([p0[0:2], p1[0:2], p2[0:2]]),
                 True,
             )
 
-            # Collect all segments
-            all_segments = np.vstack([all_segments[idx_unmasked], segs_front, masked_segments])
+            # Collect all segments for the next iteration
+            all_segments = np.vstack(
+                [
+                    all_segments[outside],
+                    segments_to_process[idx_unmasked],
+                    segs_front,
+                    masked_segments,
+                ]
+            )
 
-        # (D) Crop to camera view
-        segments_2d = all_segments[:, :, 0:2]
-        mls = MultiLineString(list(segments_2d))
-        cam_view = Polygon(((-1, -1), (-1, 1), (1, 1), (1, -1)))
-        # mls = mls.intersection(cam_view)
-
-        # (E) Convert to 2D data and  merge line strings
+        # (D) Convert to 2D data and  merge line strings
+        mls = asMultiLineString(all_segments[:, :, 0:2])
         tot_seg_count = len(mls)
         segments_optimized = shapely.ops.linemerge(mls)
-        # segments_optimized = mls
         print(f"Seg count: {tot_seg_count}, optimized seg count: {len(segments_optimized)}")
         return segments_optimized

@@ -42,6 +42,81 @@ def vertices_matmul(vertices: np.ndarray, matrix: np.ndarray) -> np.ndarray:
     return output
 
 
+# noinspection DuplicatedCode
+def segments_outside_triangle_2d(segments: np.ndarray, triangle: np.ndarray) -> np.ndarray:
+    """
+    Compute which segments are outside the face, considering only 2D projection along Z axis.
+    As a results, the input's Z data is disregarded and optional.
+    :param segments: (M x 2 x 2-3) segments
+    :param triangle: (3 x 2-3) face
+    :return: Mx1 array of boolean, true for segments outside of the triangle
+    """
+
+    if len(segments.shape) != 3 or segments.shape[1] != 2 or not segments.shape[2] in (2, 3):
+        raise ValueError(
+            f"segments array has shape {segments.shape} instead of (N, 2, 2 or 3)"
+        )
+
+    if len(triangle.shape) != 2 or not triangle.shape[1] in (2, 3):
+        raise ValueError(f"triangle array has shape {triangle.shape} instead of (3, 2 or 3)")
+
+    """
+    https://gamedev.stackexchange.com/a/21110
+    if t0, t1 and t2 are all on the same side of line P0P1, return NOT INTERSECTING
+    if P0 AND P1 are on the other side of line t0t1 as t2, return NOT INTERSECTING
+    if P0 AND P1 are on the other side of line t1t2 as t0, return NOT INTERSECTING
+    if P0 AND P1 are on the other side of line t2t0 as t1, return NOT INTERSECTING
+    """
+
+    p0 = segments[:, 0, 0:2]
+    p1 = segments[:, 1, 0:2]
+    t0 = triangle[0, 0:2]
+    t1 = triangle[1, 0:2]
+    t2 = triangle[2, 0:2]
+
+    p0p1 = p1 - p0
+
+    p0t0 = t0 - p0
+    p0t1 = t1 - p0
+    p0t2 = t2 - p0
+
+    t0p0 = -p0t0
+    t1p0 = -p0t1
+    t2p0 = -p0t2
+
+    t0p1 = p1 - t0
+    t1p1 = p1 - t1
+    t2p1 = p1 - t2
+
+    t0t1 = t1 - t0
+    t1t2 = t2 - t1
+    t2t0 = t0 - t2
+
+    t1t0 = -t0t1
+    t2t1 = -t1t2
+    t0t2 = -t2t0
+
+    f1 = np.cross(t0t1, t0p0) * np.cross(t0t1, t0t2)
+    f2 = np.cross(t0t1, t0t2) * np.cross(t0t1, t0p1)
+
+    f3 = np.cross(t1t2, t1p0) * np.cross(t1t2, t1t0)
+    f4 = np.cross(t1t2, t1t0) * np.cross(t1t2, t1p1)
+
+    f5 = np.cross(t2t0, t2p0) * np.cross(t2t0, t2t1)
+    f6 = np.cross(t2t0, t2t1) * np.cross(t2t0, t2p1)
+
+    p0p1_cross_p0t1 = np.cross(p0p1, p0t1)
+    f7 = np.cross(p0p1, p0t0) * p0p1_cross_p0t1
+    f8 = p0p1_cross_p0t1 * np.cross(p0p1, p0t2)
+
+    return (
+        np.logical_and(f1 <= 0, f2 <= 0)
+        | np.logical_and(f3 <= 0, f4 <= 0)
+        | np.logical_and(f5 <= 0, f6 <= 0)
+        | np.logical_and(f7 >= 0, f8 >= 0)
+    )
+
+
 class ParallelType(enum.Enum):
     """
     Enum to describe parallelism information.
