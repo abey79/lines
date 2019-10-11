@@ -7,6 +7,7 @@ from lines.math import (
     ParallelType,
     mask_segments,
     segments_outside_triangle_2d,
+    split_segments,
 )
 from lines.tables import CUBE_VERTICES, CUBE_SEGMENTS, CUBE_FACES
 
@@ -87,7 +88,7 @@ def test_vertices_matmul_three_dimensions():
             assert np.all(o_faces[i][j] == m @ faces[i][j])
 
 
-def test_segments_outside_triangle_2d():
+def test_segments_outside_triangle_2d_basic():
     seg = np.array(
         [
             [(0.2, 0.2), (5, 5)],
@@ -106,6 +107,20 @@ def test_segments_outside_triangle_2d():
             segments_outside_triangle_2d(seg, np.array([(0, 0), (1, 0), (0, 1)])),
             np.array([False, False, False, False, True, True, True, False]),
         )
+    )
+
+
+def test_segments_outside_triangle_2d_3d_input():
+    seg3 = np.random.rand(50, 2, 3)
+    tri3 = np.random.rand(3, 3)
+    seg2 = np.array(seg3[:, :, 0:2])
+    tri2 = np.array(tri3[:, 0:2])
+
+    assert np.all(
+        segments_outside_triangle_2d(seg3, tri3) == segments_outside_triangle_2d(seg2, tri2)
+    )
+    assert np.all(
+        segments_outside_triangle_2d(seg3, tri2) == segments_outside_triangle_2d(seg2, tri3)
     )
 
 
@@ -231,4 +246,25 @@ def test_mask_segment_bug_disappearing_segment(root_directory):
     assert np.any(np.all(np.all(results == seg, axis=2), axis=1))
 
 
-# TODO: add tests for split_segments()
+def test_split_segments_basic():
+    s0 = [0, 0, 0]
+    s1 = [2, 2, 2]
+    p0 = [0, 0, 1]
+    n = [0, 0, 1]
+
+    front, back = split_segments(np.array([[s0, s1]]), np.array(p0), np.array(n))
+
+    assert np.all(back == np.array([[(s0, [1, 1, 1])]]))
+    assert np.all(front == np.array([[([1, 1, 1], s1)]]))
+
+
+def test_split_segments_opposite_n():
+    s = np.random.rand(50, 2, 3)
+    p0 = np.random.rand(3)
+    n = np.random.rand(3)
+
+    f1, b1 = split_segments(s, p0, n)
+    f2, b2 = split_segments(s, p0, -n)
+
+    assert np.all(f1 == f2)
+    assert np.all(b1 == b2)
