@@ -8,6 +8,7 @@ pytest
 
 # Examples requirements
 matplotlib
+pywavefront
 
 # Dev/test requirements
 black
