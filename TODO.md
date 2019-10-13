@@ -47,3 +47,11 @@
 
 - empty scene crashes
 - cow.obj crashes
+- This creates a glitch:
+
+ ```python
+scene = Scene()
+scene.add(Cube())
+scene.look_at((2, 1, 2), (0, 0, 0))
+scene.perspective(50 / 180 * math.pi, 0.1, 10)
+```
