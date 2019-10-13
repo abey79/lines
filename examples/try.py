@@ -32,7 +32,7 @@ def main():
     scene.add(TriangleShape((1, 0, 0), (-1, 0, 0), (0, 0, 2)))
 
     scene.look_at((2, 2, 1), (0, 0, 1))
-    scene.perspective(90 / 180 * math.pi, 0.1, 10)
+    scene.perspective(90, 0.1, 10)
     mls = scene.render()
 
     plot_mls(mls)

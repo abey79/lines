@@ -53,7 +53,7 @@ def main(silhouette: bool = False):
 
     scene.add(obj)
     scene.look_at((2, 2, 2), (0, 0, 0.5))
-    scene.perspective(25 / 180 * math.pi, 0.1, 10)
+    scene.perspective(25, 0.1, 10)
 
     mls = scene.render()
     plot_mls(mls)

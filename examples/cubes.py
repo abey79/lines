@@ -31,7 +31,7 @@ def main(silhouette: bool = False):
         n.add(SilhouetteSkin(keep_segments=False))
     scene.add(n)
     scene.look_at((25, 22.5, 15), (0, 0, 0))
-    scene.perspective(50 / 180 * math.pi, 0.1, 10)
+    scene.perspective(50, 0.1, 10)
 
     mls = scene.render()
     plot_mls(mls)

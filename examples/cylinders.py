@@ -24,7 +24,7 @@ def main():
     scene.add(Cylinder(vertical_segs=False, silhouette=True, translate=(0, 3, 0)))
 
     scene.look_at((12, 0, 4), (0, 0, 0))
-    scene.perspective(50 / 180 * math.pi, 0.1, 20)
+    scene.perspective(50, 0.1, 20)
 
     mls = scene.render()
     plot_mls(mls)

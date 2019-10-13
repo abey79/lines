@@ -62,7 +62,7 @@ class Scene(Node):
         self._camera_matrix = frustum_matrix @ self._camera_matrix
 
     def perspective(self, fov: float, near: float, far: float) -> None:
-        y_max = near * math.tan(fov / 2)
+        y_max = near * math.tan(fov * math.pi / 180 / 2)
         x_max = y_max * 1  # y_max * aspect
         self.frustum(-x_max, x_max, -y_max, y_max, near, far)
 
