@@ -1,3 +1,4 @@
+
 import math
 from typing import Sequence
 
@@ -12,20 +13,13 @@ from lines.math import (
     split_segments,
     segments_outside_triangle_2d,
 )
-from .shapes import Shape
+from .shapes import Node
 
 
-class Scene:
+class Scene(Node):
     def __init__(self):
-        self._shapes = []
+        super().__init__()
         self._camera_matrix = np.identity(4)
-
-    def add(self, shape: Shape) -> None:
-        """
-        Add a shape to the scene.
-        :param shape: the shape to add
-        """
-        self._shapes.append(shape)
 
     def look_at(self, eye: Sequence[float], to: Sequence[float]) -> None:
         eye = np.array(eye, dtype="float64")
@@ -80,16 +74,7 @@ class Scene:
         """
 
         # (A) Gather all segments and all faces, projected in camera space by Shape.compile()
-
-        segment_set = []
-        face_set = []
-        for shape in self._shapes:
-            segments, faces = shape.compile(self._camera_matrix)
-            segment_set.append(segments)
-            face_set.append(faces)
-
-        all_segments = np.vstack(segment_set)
-        all_faces = np.vstack(face_set)
+        all_segments, all_faces = self.compile(self._camera_matrix)
 
         # (B) Crop anything that is not in the frustum
         # TODO: should also crop in the Z-direction

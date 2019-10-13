@@ -150,4 +150,27 @@ class Node(Shape):
     shapes.
     """
 
-    # TODO
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._shapes = []
+
+    def add(self, shape: Shape) -> None:
+        """
+        Add a shape to the scene.
+        :param shape: the shape to add
+        """
+        self._shapes.append(shape)
+
+    def compile(self, camera_matrix: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Delegate compilation to sub-shapes. We apply the Node's transform to the camera matrix
+        to apply it globally to sub-shapes.
+        """
+        segment_set = []
+        face_set = []
+        for shape in self._shapes:
+            segments, faces = shape.compile(camera_matrix @ self.transform)
+            segment_set.append(segments)
+            face_set.append(faces)
+
+        return np.vstack(segment_set), np.vstack(face_set)
