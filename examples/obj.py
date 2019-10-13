@@ -1,13 +1,13 @@
 import math
 import timeit
-from typing import Set, Tuple
+from typing import Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
-from shapely.geometry import MultiLineString
 import pywavefront
+from shapely.geometry import MultiLineString
 
-from lines import Scene, PolyShape
+from lines import Scene, PolyShape, SilhouetteSkin
 
 
 def plot_mls(mls: MultiLineString) -> None:
@@ -42,17 +42,15 @@ class OBJShape(PolyShape):
         super().__init__(vertices, list(segs), faces, **kwargs)
 
 
-def main():
-    # TODO: empty scene crashes
-    # TODO: cow.obj crashes with
-    #       scene.look_at((25, 22.5, 15), (0, 0, 0))
-    #       scene.perspective(50 / 180 * math.pi, 0.1, 10)
-
+def main(silhouette: bool = False):
     scene = Scene()
 
     obj = OBJShape("deer.obj")
     obj.rotate_x(-math.pi / 2)
     obj.rotate_z(-math.pi / 2)
+    if silhouette:
+        obj.add(SilhouetteSkin(keep_segments=False))
+
     scene.add(obj)
     scene.look_at((2, 2, 2), (0, 0, 0.5))
     scene.perspective(25 / 180 * math.pi, 0.1, 10)
@@ -62,4 +60,4 @@ def main():
 
 
 if __name__ == "__main__":
-    print(f"Execution time: {timeit.timeit(main, number=1)}")
+    print(f"Execution time: {timeit.timeit(lambda : main(True), number=1)}")

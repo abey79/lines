@@ -1,6 +1,11 @@
+import logging
 from typing import Tuple
 
 import numpy as np
+import shapely.ops
+from shapely.geometry import Polygon
+
+logger = logging.getLogger(__name__)
 
 
 class Skin:
@@ -25,3 +30,57 @@ class Skin:
 
         # do nothing
         return segments, faces
+
+
+class SilhouetteSkin(Skin):
+    """
+    This skin add segments corresponding to the silhouette of the shape. This can be useful
+    for curved shapes such as cylinders.
+    """
+
+    def __init__(self, keep_segments: bool = True):
+        super().__init__()
+        self._keep_segments = keep_segments
+
+    def apply(
+        self, segments: np.ndarray, faces: np.ndarray, camera_matrix: np.ndarray
+    ) -> Tuple[np.ndarray, np.ndarray]:
+
+        """
+        Add the silhouette of the faces to the segments.
+        """
+
+        if len(faces) > 0:
+            p = shapely.ops.unary_union([Polygon(f) for f in faces])
+
+            mls = p.boundary
+            if mls.geom_type == "LineString":
+                mls = [mls]
+
+            new_segs = []
+            for ls in mls:
+                pts = np.array(ls)
+                new_segs.append(np.hstack((pts[:-1], pts[1:])).reshape((len(pts) - 1, 2, 3)))
+        else:
+            new_segs = [np.empty((0, 2, 3))]
+
+        if self._keep_segments:
+            new_segs.append(segments)
+
+        final_segments = np.vstack(new_segs)
+
+        # optimize overlapping segments (note: some rounding is required to account for
+        # numerical errors in the silhouette computation)
+        sm = np.sum(final_segments, axis=2)
+        idx = sm[:, 1] < sm[:, 0]
+        sorted_segs = np.copy(final_segments)
+        sorted_segs[idx, 0, :] = final_segments[idx, 1, :]
+        sorted_segs[idx, 1, :] = final_segments[idx, 0, :]
+        final_segments = np.unique(np.round(sorted_segs, decimals=10), axis=0)
+
+        logger.info(
+            f"original segments: {len(segments)}, intermediate count: {len(sorted_segs)}, "
+            f"optimized count: {len(final_segments)}"
+        )
+
+        return final_segments, faces

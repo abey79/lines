@@ -109,11 +109,13 @@ def segments_outside_triangle_2d(segments: np.ndarray, triangle: np.ndarray) -> 
     f7 = np.cross(p0p1, p0t0) * p0p1_cross_p0t1
     f8 = p0p1_cross_p0t1 * np.cross(p0p1, p0t2)
 
+    # some tolerance is accepted to ensure that face do not hide segment running behind
+    # along the edge, as it regularly happens with SilhouetteSkin
     return (
-        np.logical_and(f1 <= 0, f2 <= 0)
-        | np.logical_and(f3 <= 0, f4 <= 0)
-        | np.logical_and(f5 <= 0, f6 <= 0)
-        | np.logical_and(f7 >= 0, f8 >= 0)
+            np.logical_and(f1 <= 1e-12, f2 <= 1e-12)
+            | np.logical_and(f3 <= 1e-12, f4 <= 1e-12)
+            | np.logical_and(f5 <= 1e-12, f6 <= 1e-12)
+            | np.logical_and(f7 >= 1e-12, f8 >= 1e-12)
     )
 
 
