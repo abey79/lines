@@ -3,6 +3,8 @@ from typing import Sequence, Tuple, Union
 
 import numpy as np
 
+from .skins import Skin
+
 
 class Shape:
     """
@@ -10,6 +12,7 @@ class Shape:
     A Shape instance models a single 3D object and allows the user to act upon it in the
     following ways:
     - Apply transforms on the object (scaling, rotation, translation).
+    - Apply one or more skins, which may affect the compilation process
     - Compile the object into 3D segments and faces according to a camera projection matrix.
 
     Instances of the Shape class are valid, but compile into empty segment/face sets.
@@ -33,6 +36,8 @@ class Shape:
         :param rotate_z: rotation around z axis (rad)
         :param translate: translation
         """
+        self._skins = []
+
         self.transform = np.identity(4)
         if scale is not None:
             self.scale(scale)
@@ -44,6 +49,17 @@ class Shape:
             self.rotate_z(rotate_z)
         if translate is not None:
             self.translate(translate)
+
+    def add(self, item: Skin) -> None:
+        """
+        Add an item to the shape. Shape handles only skins. Node also handles sub-shapes
+        :param item: skin to add
+        :return:
+        """
+        if isinstance(item, Skin):
+            self._skins.append(item)
+        else:
+            raise ValueError("only Skin instances may be added to a Shape")
 
     @property
     def transform(self) -> np.ndarray:
@@ -118,8 +134,24 @@ class Shape:
         self.__transform[1][3] += v_y
         self.__transform[2][3] += v_z
 
-    # noinspection PyMethodMayBeStatic
     def compile(self, camera_matrix: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Transform the shape into segments and (opaque) faces in camera space, possibly applying
+        skins in the process. The actual compilation is delegated to _compile_impl(), which
+        subclasses should override.
+        :param camera_matrix: (4x4) camera view and projection matrix
+        :return: ([Nx2x3] ndarray of segments, [Mx3x3] ndarray of triangles
+        """
+
+        segs, faces = self._compile_impl(camera_matrix)
+
+        for skin in self._skins:
+            segs, faces = skin.apply(segs, faces, camera_matrix)
+
+        return segs, faces
+
+    # noinspection PyMethodMayBeStatic
+    def _compile_impl(self, camera_matrix: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """
         Subclass must implement this method to compile it into a set of 3D segments and faces
         in camera space. The following steps are typically applied:
@@ -129,8 +161,7 @@ class Shape:
         :param camera_matrix: (4x4) camera view and projection matrix
         :return: ([Nx2x3] ndarray of segments, [Mx3x3] ndarray of triangles
         """
-
-        # return nothing
+        # return emptiness
         return np.zeros(shape=(0, 2, 3)), np.zeros(shape=(0, 3, 3))
 
 
@@ -154,14 +185,19 @@ class Node(Shape):
         super().__init__(**kwargs)
         self._shapes = []
 
-    def add(self, shape: Shape) -> None:
+    def add(self, item: Union[Shape, Skin]) -> None:
         """
-        Add a shape to the scene.
-        :param shape: the shape to add
+        Add a sub-shape or a skin to the node.
+        :param item: the shape to add
         """
-        self._shapes.append(shape)
+        if isinstance(item, Skin):
+            super().add(item)
+        elif isinstance(item, Shape):
+            self._shapes.append(item)
+        else:
+            raise ValueError("only Skin or Shape instances may be added to a Node")
 
-    def compile(self, camera_matrix: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    def _compile_impl(self, camera_matrix: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """
         Delegate compilation to sub-shapes. We apply the Node's transform to the camera matrix
         to apply it globally to sub-shapes.

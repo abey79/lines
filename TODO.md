@@ -2,9 +2,12 @@
 
 ## Shapes
 
-- SilhouettePolyShape: output segment for the silhouette, to allow easy rendering of curved shape (cones, cylinders, etc.)
 - Striped cubes (as in fogleman/ln)
 
+## Skins
+
+- SilhouetteSkin: output segment for the silhouette, to allow easy rendering of curved shape (cones, cylinders, etc.)
+- StripeSkin: vertical striping for arbitrary shape
 
 ## Renderer
 
@@ -31,4 +34,8 @@
 
 ## Examples
 
+- Automate example running:
+    - factor all example in a function that returns a RenderedScene
+    - generic example runner with option to run svg, matplotlib, etc.
+    - script to run all example for automated testing purposes
 - Map drawer

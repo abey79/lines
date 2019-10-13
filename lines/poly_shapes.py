@@ -34,7 +34,7 @@ class PolyShape(Shape):
         self._segments = np.reshape(np.array(segments, dtype=np.uint32), (len(segments), 2))
         self._faces = np.reshape(np.array(faces, dtype=np.uint32), (len(faces), 3))
 
-    def compile(self, camera_matrix: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    def _compile_impl(self, camera_matrix: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         # Project vertices to camera space and normalise to 3D
         vertices = vertices_matmul(self._vertices, camera_matrix @ self.transform)
         vertices = np.divide(vertices[:, 0:3], np.tile(vertices[:, -1:], (1, 3)))
