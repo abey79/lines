@@ -10,6 +10,7 @@
 
 ## Renderer
 
+- Invert rendering pipeline (process per segment instead of per face), enables parallel processing!!
 - Frustum filtering should take into account Z direction as well
 - Frustum filtering should apply to faces as well
 - Example OBJ with deer.obj has artifacts

@@ -47,13 +47,76 @@ class PolyShape(Shape):
 
 class Cube(PolyShape):
     """
-    This shape represent a cube centered on (0, 0, 0) with unit side length
+    This shape represent an opaque cube centered on (0, 0, 0) with unit side length.
     """
 
     def __init__(self, **kwargs):
         from .tables import CUBE_VERTICES, CUBE_SEGMENTS, CUBE_FACES
 
         super().__init__(CUBE_VERTICES, CUBE_SEGMENTS, CUBE_FACES, **kwargs)
+
+
+class Pyramid(PolyShape):
+    """
+    This shape represent an opaque pyramid with unit-length square base, centered on (0, 0, 0).
+    """
+
+    def __init__(self, **kwargs):
+        from .tables import PYRAMID_VERTICES, PYRAMID_SEGMENTS, PYRAMID_FACES
+
+        super().__init__(PYRAMID_VERTICES, PYRAMID_SEGMENTS, PYRAMID_FACES, **kwargs)
+
+
+class StrippedCube(PolyShape):
+    """
+    This shape represent a cube centered on (0, 0, 0) with unit side length. Instead of the
+    cube structure, segments are lines along the cube's vertical faces. This is directly
+    inspired (erm... copied) from Fogleman's ln project.
+    """
+
+    def __init__(self, line_count=8, **kwargs):
+        """
+        :param line_count: number of line per face
+        """
+        n = line_count
+
+        # vertices
+        row = (np.arange(n) / n - 0.5).reshape((n, 1))
+        half = 0.5 * np.ones_like(row)
+        vertices = np.block(
+            [
+                # bottom square
+                [row, -half, -half],
+                [half, row, -half],
+                [-row, half, -half],
+                [-half, -row, -half],
+                # top square
+                [row, -half, half],
+                [half, row, half],
+                [-row, half, half],
+                [-half, -row, half],
+            ]
+        )
+
+        # segment indices
+        segments = np.block(
+            [
+                np.arange(4 * n).reshape((4 * n, 1)),
+                np.arange(4 * n).reshape((4 * n, 1)) + 4 * n,
+            ]
+        )
+
+        # face indices
+        f = []
+        for i in range(0, 4 * n, n):
+            f.append((i, (i + n) % (4 * n), i + 4 * n))
+            f.append(((i + n) % (4 * n), i + 4 * n, 4 * n + (i + n) % (4 * n)))
+        f.extend(
+            [(0, n, 2 * n), (0, 2 * n, 3 * n), (4 * n, 5 * n, 6 * n), (4 * n, 6 * n, 7 * n)]
+        )
+        faces = np.array(f)
+
+        super().__init__(vertices, segments, faces, **kwargs)
 
 
 class Cylinder(PolyShape):
