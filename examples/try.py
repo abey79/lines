@@ -1,27 +1,5 @@
-import math
-import matplotlib.pyplot as plt
-from shapely.geometry import MultiLineString
-
-from lines import PolyShape, Cube, Transform, Scene
-
-
-class SegmentShape(PolyShape):
-    def __init__(self, p0, p1):
-        super().__init__([p0, p1], [(0, 1)], [])
-
-
-class TriangleShape(PolyShape):
-    def __init__(self, p0, p1, p2):
-        super().__init__([p0, p1, p2], [(0, 1), (1, 2), (2, 0)], [(0, 1, 2)])
-
-
-def plot_mls(mls: MultiLineString) -> None:
-    for ls in mls:
-        plt.plot(*ls.xy, "-")
-    plt.axis("equal")
-    plt.xlim([-1, 1])
-    plt.ylim([-1, 1])
-    plt.show()
+from lines import Scene
+from lines import SegmentShape, TriangleShape
 
 
 def main():
@@ -33,9 +11,7 @@ def main():
 
     scene.look_at((2, 2, 1), (0, 0, 1))
     scene.perspective(90, 0.1, 10)
-    mls = scene.render()
-
-    plot_mls(mls)
+    scene.render().show()
 
 
 if __name__ == "__main__":

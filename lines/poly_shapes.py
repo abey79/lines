@@ -45,6 +45,21 @@ class PolyShape(Shape):
         return vertices[self._segments], vertices[self._faces]
 
 
+class SegmentShape(PolyShape):
+    def __init__(self, p0, p1, **kwargs):
+        super().__init__([p0, p1], [(0, 1)], [], **kwargs)
+
+
+class TriangleShape(PolyShape):
+    def __init__(self, p0, p1, p2, add_segments=True, **kwargs):
+        super().__init__(
+            [p0, p1, p2],
+            [(0, 1), (1, 2), (2, 0)] if add_segments else [],
+            [(0, 1, 2)],
+            **kwargs,
+        )
+
+
 class Cube(PolyShape):
     """
     This shape represent an opaque cube centered on (0, 0, 0) with unit side length.

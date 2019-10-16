@@ -1,20 +1,7 @@
-import math
 import random
 import timeit
 
-import matplotlib.pyplot as plt
-from shapely.geometry import MultiLineString
-
 from lines import Cube, Scene, Node, SilhouetteSkin
-
-
-def plot_mls(mls: MultiLineString) -> None:
-    for ls in mls:
-        plt.plot(*ls.xy, "k-", solid_capstyle="round", lw=1)
-    plt.axis("equal")
-    plt.xlim([-1, 1])
-    plt.ylim([-1, 1])
-    plt.show()
 
 
 def main(silhouette: bool = False):
@@ -32,10 +19,8 @@ def main(silhouette: bool = False):
     scene.add(n)
     scene.look_at((25, 22.5, 15), (0, 0, 0))
     scene.perspective(50, 0.1, 10)
-
-    mls = scene.render()
-    plot_mls(mls)
+    scene.render().show()
 
 
 if __name__ == "__main__":
-    print(f"Execution time: {timeit.timeit(lambda : main(True), number=1)}")
+    print(f"Execution time: {timeit.timeit(lambda : main(), number=1)}")

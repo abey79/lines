@@ -1,3 +1,4 @@
+import collections
 import enum
 
 import numpy as np
@@ -7,6 +8,24 @@ from shapely.geometry import Polygon, asLineString
 def _validate_segments(segments: np.ndarray) -> None:
     if len(segments.shape) != 3 or segments.shape[1:] != (2, 3):
         raise ValueError(f"segments array has shape {segments.shape} instead of (N, 2, 3)")
+
+
+def _validate_shape(a: np.ndarray, *args):
+    if len(a.shape) != len(args):
+        return False
+
+    for s, v in zip(a.shape, args):
+        if isinstance(v, int):
+            if s != v:
+                return False
+        elif isinstance(v, collections.abc.Iterable):
+            if not s in v:
+                return False
+        else:
+            if v is not None:
+                return False
+
+    return True
 
 
 def vertices_matmul(vertices: np.ndarray, matrix: np.ndarray) -> np.ndarray:
@@ -112,10 +131,89 @@ def segments_outside_triangle_2d(segments: np.ndarray, triangle: np.ndarray) -> 
     # some tolerance is accepted to ensure that face do not hide segment running behind
     # along the edge, as it regularly happens with SilhouetteSkin
     return (
-            np.logical_and(f1 <= 1e-12, f2 <= 1e-12)
-            | np.logical_and(f3 <= 1e-12, f4 <= 1e-12)
-            | np.logical_and(f5 <= 1e-12, f6 <= 1e-12)
-            | np.logical_and(f7 >= 1e-12, f8 >= 1e-12)
+        np.logical_and(f1 <= 1e-12, f2 <= 1e-12)
+        | np.logical_and(f3 <= 1e-12, f4 <= 1e-12)
+        | np.logical_and(f5 <= 1e-12, f6 <= 1e-12)
+        | np.logical_and(f7 >= 1e-12, f8 >= 1e-12)
+    )
+
+
+# noinspection DuplicatedCode
+def triangles_overlap_segment_2d(triangles: np.ndarray, segment: np.ndarray) -> np.ndarray:
+    """
+    Compute which triangles overlap a segment, considering only 2D projection along Z axis.
+    The input's Z data is disregarded and optional.
+    :param triangles: (M x 3 x 2-3) triangles
+    :param segment: (2 x 2-3) segment
+    :return: Mx1 array of boolean, true faces overlapping the segment
+    """
+
+    if (
+        len(triangles.shape) != 3
+        or triangles.shape[1] != 3
+        or not triangles.shape[2] in (2, 3)
+    ):
+        raise ValueError(
+            f"triangles array has shape {triangles.shape} instead of (N, 3, 2 or 3)"
+        )
+
+    if len(segment.shape) != 2 or segment.shape[0] != 2 or not segment.shape[1] in (2, 3):
+        raise ValueError(f"segment array has shape {segment.shape} instead of (2, 2 or 3)")
+
+    """
+    https://gamedev.stackexchange.com/a/21110
+    if t0, t1 and t2 are all on the same side of line P0P1, return NOT INTERSECTING
+    if P0 AND P1 are on the other side of line t0t1 as t2, return NOT INTERSECTING
+    if P0 AND P1 are on the other side of line t1t2 as t0, return NOT INTERSECTING
+    if P0 AND P1 are on the other side of line t2t0 as t1, return NOT INTERSECTING
+    """
+
+    p0 = segment[0, 0:2]
+    p1 = segment[1, 0:2]
+    t0 = triangles[:, 0, 0:2]
+    t1 = triangles[:, 1, 0:2]
+    t2 = triangles[:, 2, 0:2]
+
+    p0p1 = p1 - p0
+
+    p0t0 = t0 - p0
+    p0t1 = t1 - p0
+    p0t2 = t2 - p0
+
+    t0p0 = -p0t0
+    t1p0 = -p0t1
+    t2p0 = -p0t2
+
+    t0p1 = p1 - t0
+    t1p1 = p1 - t1
+    t2p1 = p1 - t2
+
+    t0t1 = t1 - t0
+    t1t2 = t2 - t1
+    t2t0 = t0 - t2
+
+    t1t0 = -t0t1
+    t2t1 = -t1t2
+    t0t2 = -t2t0
+
+    f1 = np.cross(t0t1, t0p0) * np.cross(t0t1, t0t2)
+    f2 = np.cross(t0t1, t0t2) * np.cross(t0t1, t0p1)
+
+    f3 = np.cross(t1t2, t1p0) * np.cross(t1t2, t1t0)
+    f4 = np.cross(t1t2, t1t0) * np.cross(t1t2, t1p1)
+
+    f5 = np.cross(t2t0, t2p0) * np.cross(t2t0, t2t1)
+    f6 = np.cross(t2t0, t2t1) * np.cross(t2t0, t2p1)
+
+    p0p1_cross_p0t1 = np.cross(p0p1, p0t1)
+    f7 = np.cross(p0p1, p0t0) * p0p1_cross_p0t1
+    f8 = p0p1_cross_p0t1 * np.cross(p0p1, p0t2)
+
+    return (
+        np.logical_and(f1 >= 0, f2 >= 0)
+        | np.logical_and(f3 >= 0, f4 >= 0)
+        | np.logical_and(f5 >= 0, f6 >= 0)
+        | np.logical_and(f7 <= 0, f8 <= 0)
     )
 
 
@@ -179,6 +277,57 @@ def segments_parallel_to_face(
     output[para_idx[idx1]] = ParallelType.PARALLEL_COINCIDENT.value
     output[para_idx[idx2]] = ParallelType.PARALLEL_FRONT.value
     output[para_idx[idx3]] = ParallelType.PARALLEL_BACK.value
+
+    return output
+
+
+def segment_parallel_to_planes(
+    segment: np.ndarray, p0: np.ndarray, n: np.ndarray
+) -> np.ndarray:
+    """
+    Compare a segments to an array of  plane defined by a point and a normal, and return an
+    array containing ParallelType information for each segment. PARALLEL_FRONT is returned when
+    the segment is on the positive side w.r.t. the normal.
+    :param segment: 2x3 segment
+    :param p0: Mx3 plane reference points
+    :param n: Mx3 plane normals (not necessarily normalized
+    :return: length M array of ParallelType
+    """
+
+    if not _validate_shape(segment, 2, 3):
+        raise ValueError(f"segment has shape {segment.shape} instead of (2, 3)")
+
+    if not _validate_shape(p0, None, 3):
+        raise ValueError(f"p0 has shape {p0.shape} instead of (M, 3)")
+
+    if not _validate_shape(n, None, 3):
+        raise ValueError(f"n has shape {n.shape} instead of (M, 3)")
+
+    if p0.shape[0] != n.shape[0]:
+        raise ValueError(f"p0 and n must have the same first dimension")
+
+    s0 = segment[0]
+    s1 = segment[1]
+    sv = s1 - s0
+
+    output = np.empty(len(p0), dtype=int)
+    output.fill(ParallelType.NOT_PARALLEL.value)
+
+    # Test for parallelism: dot(sv, n) == 0
+    para_idx, = np.where(np.isclose(np.dot(n, sv), 0, atol=1e-16))
+
+    # dot(s0 - p0, n) is:
+    # 0 for coincidence
+    # >0 if s0 is same side as n
+    # <0 if s0 is other side as n
+
+    if len(para_idx) > 0:
+        # prod = np.tensordot(s0 - p0[para_idx], n[para_idx], axes=(1, 1))
+        prod = np.sum((s0 - p0[para_idx]) * n[para_idx], axis=1)
+        idx = np.isclose(prod, 0, atol=1e-16)
+        output[para_idx[idx]] = ParallelType.PARALLEL_COINCIDENT.value
+        output[para_idx[np.logical_and(~idx, prod > 0)]] = ParallelType.PARALLEL_FRONT.value
+        output[para_idx[np.logical_and(~idx, prod < 0)]] = ParallelType.PARALLEL_BACK.value
 
     return output
 
@@ -310,3 +459,55 @@ def split_segments(
     front_segments = np.vstack([segments[front], split_segs_front])
     back_segments = np.vstack([segments[behind], split_segs_back])
     return front_segments, back_segments
+
+
+def mask_segment(segment: np.ndarray, faces: np.ndarray, normals: np.ndarray) -> np.ndarray:
+    """
+    Compute the visibility of the segment given the provided faces and pre-computed normals.
+    Segments are hidden when the are on the opposite side of the normal
+    :param segment: (2x3) the segment to process
+    :param faces: (Nx3x3) the faces to consider
+    :param normals: (Nx3) the pre-computed normals
+    :return: (Mx2x3) list of visible sub-segments
+    """
+
+    if not _validate_shape(segment, 2, 3):
+        raise ValueError(f"segment has shape {segment.shape} instead of (2, 3)")
+
+    if not _validate_shape(faces, None, 3, 3):
+        raise ValueError(f"faces has shape {faces.shape} instead of (M, 3, 3)")
+
+    if not _validate_shape(normals, None, 3):
+        raise ValueError(f"normals has shape {normals.shape} instead of (M, 3)")
+
+    if faces.shape[0] != normals.shape[0]:
+        raise ValueError(f"faces and normals must have the same first dimension")
+
+    s0 = segment[0]
+    s1 = segment[1]
+    sv = s1 - s0
+
+    # Check 2D overlap, all non-overlapping faces can be ignored
+    active = triangles_overlap_segment_2d(faces, segment)
+    if not np.any(active):
+        return segment.reshape((1, 2, 3))
+
+    # Check if faces are on a plane behind both ends of the segment
+    p0 = faces[active, 0]
+    n = normals[active]
+    d0 = np.sum((s0 - p0) * n, axis=1)
+    d1 = np.sum((s1 - p0) * n, axis=1)
+    face_behind = np.logical_and(d0 >= 0, d1 >= 0)
+    active[face_behind] = False
+    if not np.any(active):
+        return segment.reshape((1, 2, 3))
+
+    face_in_front = np.logical_and(d0 < 0, d1 < 0)
+    split_idx, = np.where(np.logical_and(~behind, ~front))
+
+    # Check parallelism
+    para = segment_parallel_to_planes(segment, p0, n)
+
+    print(overlap, para)
+
+    return np.empty(shape=(0, 2, 3))

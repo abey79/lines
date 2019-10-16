@@ -3,21 +3,7 @@ This example replicates Michael Fogleman's city drawing made with his ln library
 """
 import random
 
-import matplotlib.pyplot as plt
-from shapely.geometry import MultiLineString
-
 from lines import Scene, StrippedCube
-
-
-def plot_mls(mls: MultiLineString) -> None:
-    for ls in mls:
-        plt.plot(*ls.xy, "k-", solid_capstyle="round")
-    plt.axis("off")
-    plt.axis("tight")
-    plt.axis("equal")
-    plt.xlim([-1, 1])
-    plt.ylim([-1, 1])
-    plt.show()
 
 
 def main():
@@ -32,8 +18,7 @@ def main():
     scene.look_at((1.1, 0.8, 8.2), (0, 0.2, 0))
     scene.perspective(90, 0.1, 10)
 
-    mls = scene.render()
-    plot_mls(mls)
+    scene.render().show()
 
 
 if __name__ == "__main__":

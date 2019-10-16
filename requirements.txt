@@ -1,5 +1,6 @@
 # Base requirements
 numpy
+trimesh[easy]
 shapely[vectorized]
 svgwrite
 

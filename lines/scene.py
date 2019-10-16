@@ -1,18 +1,17 @@
-
 import math
 from typing import Sequence
 
 import numpy as np
-import shapely.ops
-from shapely.geometry import MultiLineString, asMultiLineString
 
-from lines.math import (
+from .math import (
     segments_parallel_to_face,
     ParallelType,
     mask_segments,
     split_segments,
     segments_outside_triangle_2d,
+    mask_segment,
 )
+from .rendered_scene import RenderedScene
 from .shapes import Node
 
 
@@ -66,15 +65,26 @@ class Scene(Node):
         x_max = y_max * 1  # y_max * aspect
         self.frustum(-x_max, x_max, -y_max, y_max, near, far)
 
-    def render(self) -> MultiLineString:
+    def render(self, renderer: str = "v1", optimize_vectors: bool = True) -> RenderedScene:
+
+        segments, faces = self.compile(self._camera_matrix)
+        if renderer == "v1":
+            vectors = self._render_v1(segments, faces)
+        elif renderer == "v2":
+            vectors = self._render_v2(segments, faces)
+        else:
+            raise ValueError(f"renderer type '{renderer}' unsupported, us 'v1' or 'v2'")
+
+        return RenderedScene(self, vectors, optimize_vectors, segments, faces)
+
+    @staticmethod
+    def _render_v1(all_segments, all_faces) -> np.ndarray:
         """
+        FIXME
         Renders the scene with the current camera projection. Returns a
         shapely.geometry.MultiLineString object containing all the visible 2D segment
         :return: the rendered 2D lines
         """
-
-        # (A) Gather all segments and all faces, projected in camera space by Shape.compile()
-        all_segments, all_faces = self.compile(self._camera_matrix)
 
         # (B) Crop anything that is not in the frustum
         # TODO: should also crop in the Z-direction
@@ -144,9 +154,45 @@ class Scene(Node):
                 ]
             )
 
+        # (D) Convert to 2D data
+        return all_segments[:, :, 0:2]
+
+    @staticmethod
+    def _render_v2(all_segments: np.ndarray, all_faces: np.ndarray) -> np.ndarray:
+        """
+        FIXME
+        Renders the scene with the current camera projection. Returns a
+        shapely.geometry.MultiLineString object containing all the visible 2D segment
+        :return: the rendered 2D lines
+        """
+
+        # (B) Crop anything that is not in the frustum
+        # TODO: should also crop in the Z-direction
+
+        all_segments = mask_segments(
+            all_segments, np.array(((-1, -1), (-1, 1), (1, 1), (1, -1))), False
+        )
+
+        # (C) For each segment, hide some or all of it based on faces that may be in front.
+        #
+        # Quick rules:
+        # * face do not 2D overlap segment -> face not in mask
+        # * face does 2D overlap segment:
+        #   - segment fully in front of face -> face not in mask
+        #   - segment fully behind of face
+        #       - segment fully contained -> segment discarded
+        #       - other wise -> face in mask
+        #   - segment crosses the face -> sub-face added to mask
+        #
+
+        p0, p1, p2 = (all_faces[:, i] for i in range(3))
+
+        # compute normals and make sure they point up
+        n = np.cross(p1 - p0, p2 - p0)
+        n = np.where((n[:, 2] < 0).reshape(len(n), 1), -n, n)
+
+        for s in all_segments:
+            mask_segment(s, all_faces, n)
+
         # (D) Convert to 2D data and  merge line strings
-        mls = asMultiLineString(all_segments[:, :, 0:2])
-        tot_seg_count = len(mls)
-        segments_optimized = shapely.ops.linemerge(mls)
-        print(f"Seg count: {tot_seg_count}, optimized seg count: {len(segments_optimized)}")
-        return segments_optimized
+        return all_segments[:, :, 0:2]

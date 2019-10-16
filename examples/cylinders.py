@@ -1,20 +1,7 @@
-import math
 import timeit
-
-import matplotlib.pyplot as plt
-from shapely.geometry import MultiLineString
 
 from lines import Scene
 from lines.poly_shapes import Cylinder
-
-
-def plot_mls(mls: MultiLineString) -> None:
-    for ls in mls:
-        plt.plot(*ls.xy, "k-", solid_capstyle="round")
-    plt.axis("equal")
-    plt.xlim([-1, 1])
-    plt.ylim([-1, 1])
-    plt.show()
 
 
 def main():
@@ -25,9 +12,7 @@ def main():
 
     scene.look_at((12, 0, 4), (0, 0, 0))
     scene.perspective(50, 0.1, 20)
-
-    mls = scene.render()
-    plot_mls(mls)
+    scene.render().show()
 
 
 if __name__ == "__main__":

@@ -2,21 +2,10 @@ import math
 import timeit
 from typing import Tuple
 
-import matplotlib.pyplot as plt
 import numpy as np
 import pywavefront
-from shapely.geometry import MultiLineString
 
 from lines import Scene, PolyShape, SilhouetteSkin
-
-
-def plot_mls(mls: MultiLineString) -> None:
-    for ls in mls:
-        plt.plot(*ls.xy, "k-", solid_capstyle="round", lw=1)
-    plt.axis("equal")
-    plt.xlim([-1, 1])
-    plt.ylim([-1, 1])
-    plt.show()
 
 
 class OBJShape(PolyShape):
@@ -54,10 +43,8 @@ def main(silhouette: bool = False):
     scene.add(obj)
     scene.look_at((2, 2, 2), (0, 0, 0.5))
     scene.perspective(25, 0.1, 10)
-
-    mls = scene.render()
-    plot_mls(mls)
+    scene.render().show()
 
 
 if __name__ == "__main__":
-    print(f"Execution time: {timeit.timeit(lambda : main(True), number=1)}")
+    print(f"Execution time: {timeit.timeit(lambda : main(False), number=1)}")
