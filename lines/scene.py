@@ -65,8 +65,14 @@ class Scene(Node):
         x_max = y_max * 1  # y_max * aspect
         self.frustum(-x_max, x_max, -y_max, y_max, near, far)
 
-    def render(self, renderer: str = "v1", optimize_vectors: bool = True) -> RenderedScene:
-
+    def render(self, renderer: str = "v1", merge_lines: bool = True) -> RenderedScene:
+        """
+        Renders the scene as it is currently setup to a lines.RenderedScene object.
+        :param renderer: "v1" or "v2"
+        :param merge_lines: if True, lines.RenderedScene.optimize() will be called after
+        the rendering process is completed
+        :return:
+        """
         segments, faces = self.compile(self._camera_matrix)
         if renderer == "v1":
             vectors = self._render_v1(segments, faces)
@@ -75,7 +81,7 @@ class Scene(Node):
         else:
             raise ValueError(f"renderer type '{renderer}' unsupported, us 'v1' or 'v2'")
 
-        return RenderedScene(self, vectors, optimize_vectors, segments, faces)
+        return RenderedScene(self, vectors, merge_lines, segments, faces)
 
     @staticmethod
     def _render_v1(all_segments, all_faces) -> np.ndarray:
@@ -159,12 +165,6 @@ class Scene(Node):
 
     @staticmethod
     def _render_v2(all_segments: np.ndarray, all_faces: np.ndarray) -> np.ndarray:
-        """
-        FIXME
-        Renders the scene with the current camera projection. Returns a
-        shapely.geometry.MultiLineString object containing all the visible 2D segment
-        :return: the rendered 2D lines
-        """
 
         # (B) Crop anything that is not in the frustum
         # TODO: should also crop in the Z-direction
@@ -185,14 +185,10 @@ class Scene(Node):
         #   - segment crosses the face -> sub-face added to mask
         #
 
-        p0, p1, p2 = (all_faces[:, i] for i in range(3))
-
-        # compute normals and make sure they point up
-        n = np.cross(p1 - p0, p2 - p0)
-        n = np.where((n[:, 2] < 0).reshape(len(n), 1), -n, n)
-
+        results = []
         for s in all_segments:
-            mask_segment(s, all_faces, n)
+            results.append(mask_segment(s, all_faces))
+        output = np.vstack(results)
 
-        # (D) Convert to 2D data and  merge line strings
-        return all_segments[:, :, 0:2]
+        # (D) Convert to 2D data
+        return output[:, :, 0:2]

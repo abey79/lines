@@ -1,21 +1,23 @@
 # TODO
 
-## Shapes
-
-- Striped cubes (as in fogleman/ln)
-
 ## Skins
 
-- StripeSkin: vertical striping for arbitrary shape
+- Switch to duck typing with proper Typing annotation instead of base class. This will enable to cleanly increase the 
+number of hooks. See: https://stackoverflow.com/questions/44155938/duck-typing-with-python-3-5-style-type-annotations
+- Changed API to also allow the skin to operate at the vertex, seg_idx, face_idx step. 
+- StripeSkin: vertical striping for arbitrary shape (use trimesh lib for that purpose!)
+
 
 ## Renderer
 
+- Properly handle aspect ratio, which should be propagated to RenderedScene and, ultimately, to the export process
 - Invert rendering pipeline (process per segment instead of per face), enables parallel processing!!
 - Frustum filtering should take into account Z direction as well
 - Frustum filtering should apply to faces as well
-- Example OBJ with deer.obj has artifacts
 - Example OBJ with cow.obj crashes
-- Scene.render() should return a RenderedScene object
+- Option to render faces as well with shading (may require properly winded faces)
+- Option to render hidden segments (might be possible with renderer V2)
+
  
 ## RenderedScene
 
@@ -32,6 +34,7 @@
     - output to AxiDraw
     - etc. 
 
+
 ## Examples
 
 - Automate example running:
@@ -40,9 +43,11 @@
     - script to run all example for automated testing purposes
 - Map drawer
 
+
 ## Misc
 
 - using Logging for all output
+
 
 ## Bugs
 
