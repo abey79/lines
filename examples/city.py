@@ -18,7 +18,9 @@ def main():
     scene.look_at((1.1, 0.8, 8.2), (0, 0.2, 0))
     scene.perspective(90, 0.1, 10)
 
-    scene.render().show()
+    rs = scene.render()
+    rs.show()
+    rs.save('city.svg')
 
 
 if __name__ == "__main__":

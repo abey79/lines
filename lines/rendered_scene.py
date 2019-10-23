@@ -1,9 +1,10 @@
 import logging
 from typing import Union, Sequence
 
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 import shapely.ops
+import svgwrite
 from shapely.geometry import MultiLineString, asMultiLineString
 
 import lines
@@ -116,12 +117,42 @@ class RenderedScene:
         plt.ylim([-1, 1])
         plt.show()
 
-    def save(self, file_name: str) -> None:
+    def save(self, file_name: str, **kwargs) -> None:
         """
         Export the scene to a file. The provided file name's extension is used to determine
         the file format.
         Supported format: SVG, PNG, JPG
         :param file_name: file name
         """
-        # TODO: implement this
-        pass
+
+        if file_name.endswith('.svg'):
+            self.save_svg(file_name, **kwargs)
+        else:
+            # TODO: support more format
+            logging.warning(f"Unsupported file format for '{file_name}'")
+
+    def save_svg(self, file_name:str, **kwargs) -> None:
+        """
+        TODO: hacked dimensions
+        """
+        dwg = svgwrite.Drawing(
+            file_name,
+            size=(1000, 1000),
+            profile="tiny",
+            debug=False,
+        )
+
+        for line in self.mls:
+            dwg.add(
+                dwg.path(
+                    "M"
+                    + " L".join(
+                        f"{500 * (x + 1)},{500 * (1 - y)}" for x, y in line.coords
+                    ),
+                    fill="none",
+                    stroke="black",
+                    **kwargs,
+                )
+            )
+
+        dwg.save()
