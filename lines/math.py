@@ -633,8 +633,8 @@ def segment_triangle_intersection(segment, triangle):
     #             return 2;
     #         else return 0;              // ray disjoint from plane
     #     }
-    if np.linalg.norm(b) < 1e-14:  # parallel testing could be integrated here
-        if np.isclose(a, 0, atol=1e-14):
+    if np.linalg.norm(b) < 1e-13:  # parallel testing could be integrated here
+        if np.isclose(a, 0, atol=1e-13):
             return INT_COPLANAR, None, None, None, None, 0
         elif a <= 0:
             return NO_INT_PARALLEL_FRONT, None, None, None, None, 0
@@ -645,9 +645,9 @@ def segment_triangle_intersection(segment, triangle):
     #     r = a / b;
     r = a / b
 
-    if np.isclose(r, 0, atol=1e-14):
+    if np.isclose(r, 0, atol=1e-13):
         r = 0
-    elif np.isclose(r, 1, atol=1e-14):
+    elif np.isclose(r, 1, atol=1e-13):
         r = 1
 
     #     if (r < 0.0)                    // ray goes away from triangle

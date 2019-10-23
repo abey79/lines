@@ -78,8 +78,7 @@ class RenderedScene:
         show_axes: bool = False,
         show_grid: bool = False,
         show_hidden: bool = False,
-        show_faces: bool = False,
-        faces_indices: Union[int, Sequence[int]] = (),
+        show_faces: Union[int, Sequence[int], bool] = False,
     ) -> None:
         """
         Display the rendered scene with matplotlib.
@@ -88,17 +87,19 @@ class RenderedScene:
         :param show_axes: if True, axes are displayed
         :param show_grid: if True, grid are displayed
         :param show_hidden: if True, hidden segment are displayed with dotted lines
-        :param show_faces: if True, faces are displayed in transparent green
-        :param faces_indices: list of faces to display, or all if empty
+        :param show_faces: if True, faces are displayed in transparent green, alternatively you
+            may pass one or more int to specify which face to plot
         """
 
-        if show_faces:
-            if not faces_indices:
-                faces_indices = list(range(len(self._projected_faces)))
-            elif type(faces_indices) == int:
-                faces_indices = [faces_indices]
+        if show_faces is not False:
+            if type(show_faces) == int:
+                indices = [show_faces]
+            elif type(show_faces) == bool:
+                indices = list(range(len(self._projected_faces)))
+            else:
+                indices = show_faces
 
-            for face in self._projected_faces[faces_indices, :, :]:
+            for face in self._projected_faces[indices, :, :]:
                 plt.plot(face[[0, 1, 2, 0], 0], face[[0, 1, 2, 0], 1], "g-", lw=0.5, alpha=0.5)
                 plt.fill(face[[0, 1, 2, 0], 0], face[[0, 1, 2, 0], 1], "g", alpha=0.2)
         if show_hidden:
