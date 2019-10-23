@@ -12,7 +12,7 @@ def main():
 
     scene.look_at((12, 0, 4), (0, 0, 0))
     scene.perspective(50, 0.1, 20)
-    scene.render().show()
+    scene.render().show(show_hidden=True)
 
 
 if __name__ == "__main__":

@@ -11,7 +11,7 @@ def main():
     scene.perspective(70, 0.1, 10)
 
     # Render and display the scene
-    scene.render().show()
+    scene.render().show(show_hidden=True)
 
 
 if __name__ == "__main__":

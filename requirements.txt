@@ -3,9 +3,11 @@ numpy
 trimesh[easy]
 shapely[vectorized]
 svgwrite
+tqdm
 
 # Testing requirements
 pytest
+coverage
 
 # Examples requirements
 matplotlib

@@ -76,7 +76,7 @@ class SilhouetteSkin(Skin):
         sorted_segs = np.copy(final_segments)
         sorted_segs[idx, 0, :] = final_segments[idx, 1, :]
         sorted_segs[idx, 1, :] = final_segments[idx, 0, :]
-        final_segments = np.unique(np.round(sorted_segs, decimals=10), axis=0)
+        final_segments = np.unique(np.round(sorted_segs, decimals=17), axis=0)
 
         logger.info(
             f"original segments: {len(segments)}, intermediate count: {len(sorted_segs)}, "

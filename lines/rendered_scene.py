@@ -1,5 +1,5 @@
 import logging
-from typing import Union
+from typing import Union, Sequence
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -73,15 +73,37 @@ class RenderedScene:
         logging.info(f"optimized {tot_seg_count} to {len(self._mls)} line strings")
 
     def show(
-        self, black: bool = True, show_axes: bool = False, show_grid: bool = False
+        self,
+        black: bool = True,
+        show_axes: bool = False,
+        show_grid: bool = False,
+        show_hidden: bool = False,
+        show_faces: bool = False,
+        faces_indices: Union[int, Sequence[int]] = (),
     ) -> None:
         """
         Display the rendered scene with matplotlib.
         :param black: if True (default), the scene is rendered in black, otherwise let
+                        matplotlib assign a per-segment colour
         :param show_axes: if True, axes are displayed
         :param show_grid: if True, grid are displayed
-        matplotlib assign a per-segment colour
+        :param show_hidden: if True, hidden segment are displayed with dotted lines
+        :param show_faces: if True, faces are displayed in transparent green
+        :param faces_indices: list of faces to display, or all if empty
         """
+
+        if show_faces:
+            if not faces_indices:
+                faces_indices = list(range(len(self._projected_faces)))
+            elif type(faces_indices) == int:
+                faces_indices = [faces_indices]
+
+            for face in self._projected_faces[faces_indices, :, :]:
+                plt.plot(face[[0, 1, 2, 0], 0], face[[0, 1, 2, 0], 1], "g-", lw=0.5, alpha=0.5)
+                plt.fill(face[[0, 1, 2, 0], 0], face[[0, 1, 2, 0], 1], "g", alpha=0.2)
+        if show_hidden:
+            for seg in self._projected_segments:
+                plt.plot(seg[:, 0], seg[:, 1], "k:", lw=0.5)
         for ls in self.mls:
             plt.plot(*ls.xy, "k-" if black else "-", solid_capstyle="round")
         plt.axis("equal")

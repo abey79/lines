@@ -2,6 +2,7 @@ import math
 from typing import Sequence
 
 import numpy as np
+import tqdm
 
 from .math import (
     segments_parallel_to_face,
@@ -65,7 +66,7 @@ class Scene(Node):
         x_max = y_max * 1  # y_max * aspect
         self.frustum(-x_max, x_max, -y_max, y_max, near, far)
 
-    def render(self, renderer: str = "v1", merge_lines: bool = True) -> RenderedScene:
+    def render(self, renderer: str = "v2", merge_lines: bool = True) -> RenderedScene:
         """
         Renders the scene as it is currently setup to a lines.RenderedScene object.
         :param renderer: "v1" or "v2"
@@ -165,30 +166,22 @@ class Scene(Node):
 
     @staticmethod
     def _render_v2(all_segments: np.ndarray, all_faces: np.ndarray) -> np.ndarray:
-
-        # (B) Crop anything that is not in the frustum
+        # Crop anything that is not in the frustum
         # TODO: should also crop in the Z-direction
 
         all_segments = mask_segments(
             all_segments, np.array(((-1, -1), (-1, 1), (1, 1), (1, -1))), False
         )
 
-        # (C) For each segment, hide some or all of it based on faces that may be in front.
-        #
-        # Quick rules:
-        # * face do not 2D overlap segment -> face not in mask
-        # * face does 2D overlap segment:
-        #   - segment fully in front of face -> face not in mask
-        #   - segment fully behind of face
-        #       - segment fully contained -> segment discarded
-        #       - other wise -> face in mask
-        #   - segment crosses the face -> sub-face added to mask
-        #
+        if len(all_segments) == 0:
+            return np.empty(shape=(0, 2, 2))
 
+        # For each segment, hide some or all of it based on faces that may be in front.
         results = []
-        for s in all_segments:
+        # for i, s in tqdm.tqdm(enumerate(all_segments), total=len(all_segments)):
+        for s in tqdm.tqdm(all_segments):
             results.append(mask_segment(s, all_faces))
         output = np.vstack(results)
 
-        # (D) Convert to 2D data
+        # Convert to 2D data
         return output[:, :, 0:2]

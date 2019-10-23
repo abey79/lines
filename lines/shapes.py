@@ -202,6 +202,9 @@ class Node(Shape):
         Delegate compilation to sub-shapes. We apply the Node's transform to the camera matrix
         to apply it globally to sub-shapes.
         """
+        if not self._shapes:
+            return np.empty(shape=(0, 2, 3)), np.empty(shape=(0, 3, 3))
+
         segment_set = []
         face_set = []
         for shape in self._shapes:

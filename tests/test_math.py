@@ -1,4 +1,5 @@
 import itertools
+import pickle
 
 import numpy as np
 import pytest
@@ -22,8 +23,10 @@ from lines.math import (
     INT_EDGE,
     INT_VERTEX,
     DEGENERATE,
-    mask_segment)
+    mask_segment,
+)
 from lines.tables import CUBE_VERTICES, CUBE_SEGMENTS, CUBE_FACES
+from tests.utils import segment_list_equal
 
 
 def test_vertices_matmul_empty():
@@ -288,36 +291,47 @@ def test_split_segments_opposite_n():
 # expected regardless of accept_vertex_only value. If None, result is expected to be
 # identical to accept_vertex_only value.
 TRIANGLES_OVERLAP_SEGMENT_2D_TEST_DATA = [
-    ([(-1, 10), (2, 10)], False),  # 0: no intersection at all
+    ([(-1, 10), (2, 10)], False),  # no intersection at all
     ([(-1, -10), (2, -10)], False),
     ([(0.1, -0.0001), (0.9, -0.000001)], False),
     ([(0.51, 0.51), (1, 1)], False),
     ([(-0.5, 0.1), (-0.01, 0.8)], False),
-    ([(-1, 0.5), (1, 0.5)], True),  # 5: regular intersection
+    ([(2, 0), (1.1, 0)], False),  # !! collinear
+    ([(0, -1), (0, -0.1)], False),
+    ([(2, -1), (1.5, -0.5)], False),
+    ([(-1, 0.5), (1, 0.5)], True),  # regular intersection
     ([(0.5, -1), (0.5, 1)], True),
     ([(-0.5, 1), (1, -0.5)], True),
-    ([(0, 2), (0, -0.1)], True),  # 8: 1 edge + 2 vertex overlap
+    ([(1, 0), (0, 0)], True),  # exactly one edge + 2 vertex overlap
+    ([(1, 0), (0, 1)], True),
+    ([(0, 0), (0, 1)], True),
+    ([(0, 2), (0, -0.1)], True),  # 1 edge + 2 vertex overlap
+    ([(2, 0), (0, 0)], True),
     ([(-1, 0), (2, 0)], True),
     ([(-1, 2), (2, -1)], True),
-    ([(0, 2), (0, 0.5)], True),  # 11: 1 edge + 1 vertex overlap
+    ([(0.5, 0), (0, 0)], True),  # part of edge + 1 vertex overlap
+    ([(0, 0.1), (0, 0)], True),
+    ([(1, 0), (0.8, 0.2)], True),
+    ([(0, 2), (0, 0.5)], True),  # 1 edge + 1 vertex overlap
     ([(-1, 0), (0.5, 0)], True),
     ([(-1, 2), (0.5, 0.5)], True),
-    ([(0, 0.8), (0, 0.5)], True),  # 14: 1 edge + 0 vertex overlap
+    ([(0, 0.8), (0, 0.5)], True),  # 1 edge + 0 vertex overlap
     ([(0.1, 0), (0.5, 0)], True),
     ([(0.2, 0.8), (0.5, 0.5)], True),
-    ([(0, 0), (0.1, 0.1)], True),  # 17: 1 vertex (superposed) + content overlap
+    ([(0, 0), (0.1, 0.1)], True),  # 1 vertex (superposed) + content overlap
     ([(1, 0), (0.1, 0.1)], True),
     ([(0, 1), (0.1, 0.1)], True),
-    ([(-0.1, -0.1), (0.1, 0.1)], True),  # 20: 1 vertex + content overlap
+    ([(-0.1, -0.1), (0.1, 0.1)], True),  # 1 vertex + content overlap
     ([(2, -0.5), (-1, 1)], True),
     ([(-0.5, 2), (1, -1)], True),
-    ([(0, 0), (0.6, 0.6)], True),  # 23: 1 vertex overlap + opposite edge crossing
+    ([(0, 0), (0.6, 0.6)], True),  # 1 vertex overlap + opposite edge crossing
     ([(1, 0), (-0.1, 0.5)], True),
     ([(0, 1), (0.5, -0.1)], True),
-    ([(0, 0), (-3, -5)], None),  # 26: single vertex overlap (superposed)
+    ([(0, 0), (-3, -5)], None),  # single vertex overlap (superposed)
     ([(1, 0), (2, -2)], None),
     ([(0, 1), (1, 2.5)], None),
-    ([(-1, 0), (1, 2)], None),  # 29: single vertex overlap (not superposed)
+    ([(2, 0), (1, 0)], None),  # !! collinear
+    ([(-1, 0), (1, 2)], None),  # single vertex overlap (not superposed)
     ([(-1, 1), (1, -1)], None),
     ([(0, -1), (2, 1)], None),
 ]
@@ -366,8 +380,8 @@ SEGMENT_TRIANGLE_INTERSECTION_TEST_DATA = [
     # 22: outside face
     ([(2, 2, -1), (2, 2, 1)], NO_INT_OUTSIDE_FACE, (2, 2, 0), 0.5, None, None),
     ([(2, 2, -1), (2, 2, 2)], NO_INT_OUTSIDE_FACE, (2, 2, 0), 1 / 3, None, None),
-    ([(1, 1, 1.1), (-1, -1, -0.9)], NO_INT_OUTSIDE_FACE, (-0.1, -0.1, 0), 0.45, None, None),
-    ([(0, 1, 1.1), (0, -1, -0.9)], NO_INT_OUTSIDE_FACE, (0, -0.1, 0), 0.45, None, None),
+    ([(1, 1, 1.1), (-1, -1, -0.9)], NO_INT_OUTSIDE_FACE, (-0.1, -0.1, 0), 0.55, None, None),
+    ([(0, 1, 1.1), (0, -1, -0.9)], NO_INT_OUTSIDE_FACE, (0, -0.1, 0), 0.55, None, None),
     # 26: coplanar
     ([(0.5, -0.5, 0), (0.5, 2, 0)], INT_COPLANAR, None, None, None, None),
     ([(0.5, 3, 0), (0.5, 2, 0)], INT_COPLANAR, None, None, None, None),
@@ -401,14 +415,18 @@ def test_segment_triangle_intersection(
 ):
     base_triangle = [(0, 0, 0), (1, 0, 0), (0, 1, 0)]
     for triangle in itertools.permutations(base_triangle):
-        for segment in [np.array(seg), np.array([seg[1], seg[0]])]:
-            res, r, s, t, itrsct = segment_triangle_intersection(segment, np.array(triangle))
+        for segment, invert_r in [(np.array(seg), False), (np.array([seg[1], seg[0]]), True)]:
+            res, r, s, t, itrsct, _ = segment_triangle_intersection(
+                segment, np.array(triangle)
+            )
 
             assert res == result
             if intersection is not None:
                 assert np.all(np.isclose(itrsct, np.array(intersection), atol=1e-14))
             if expected_r is not None:
-                assert np.isclose(r, expected_r, atol=1e-14)
+                assert np.isclose(
+                    r, expected_r if not invert_r else 1 - expected_r, atol=1e-14
+                )
 
             # s and t are depend on triangle's vertex order
             if triangle == base_triangle:
@@ -420,18 +438,158 @@ def test_segment_triangle_intersection(
 
 def test_segment_triangle_intersection_degenerate():
     triangle = np.array([(0, 0, 0), (1, 1, 1), (2, 2, 2)])
-    res, _, _, _, _ = segment_triangle_intersection(np.random.rand(2, 3), triangle)
+    res, _, _, _, _, _ = segment_triangle_intersection(np.random.rand(2, 3), triangle)
     assert res == DEGENERATE
 
 
-MASK_SEGMENT_TEST_DATA = [([(1, 0, -1), (0, 0, 1)], [(0.5, 0, 0), (0, 0, 1)])]
+def test_segment_triangle_intersection_vertex_int_numerical_error(root_directory):
+    """
+    This is a particular case of encountered during debugging that highlighted numerical
+    error issues
+    """
+    with open(
+        root_directory + "/tests/fixtures/vertex_intersection_numerical_error.pickle", "rb"
+    ) as f:
+        m = pickle.load(f)
+    res, _, _, _, itrsct, _ = segment_triangle_intersection(m["segment"], m["face"])
+    assert res == INT_VERTEX
+    assert np.all(np.isclose(itrsct, m["segment"][1]))
+
+
+def test_segments_are_equal():
+    # quick and dirty test to make sure the test function works
+    assert segment_list_equal(
+        np.array([[(1, 2), (3, 4)], [(5, 6), (7, 8)]]),
+        np.array([[(1, 2), (3, 4)], [(5, 6), (7, 8)]]),
+    )
+
+    assert segment_list_equal(
+        np.array([[(1, 2), (3, 4)], [(5, 6), (7, 8)]]),
+        np.array([[(5, 6), (7, 8)], [(1, 2), (3, 4)]]),
+    )
+
+    assert segment_list_equal(
+        np.array([[(1, 2), (3, 4)], [(5, 6), (7, 8)]]),
+        np.array([[(7, 8), (5, 6)], [(3, 4), (1, 2)]]),
+    )
+
+
+# if expected result is None, the test assumes it is identical to input
+MASK_SEGMENT_TEST_DATA = [
+    # vertex interaction
+    ([(-1, -1, -1), (0, 0, 0)], None),
+    ([(-1, -1, 1), (0, 0, 0)], None),
+    ([(0, -1, -1), (0, 0, 0)], None),
+    ([(2, -1, 1), (1, 0, 0)], None),
+    ([(1, 1, 1), (0, 0, 0)], None),
+    ([(1, 1, -1), (0, 0, 0)], [[(1, 1), (0.5, 0.5)]]),
+    ([(0.4, 0.4, -1), (0, 0, 0)], []),
+    ([(0.3, 0.4, -1), (0, 0, 0)], []),
+    ([(0.4, 0.3, 1), (0, 0, 0)], [[(0.4, 0.3), (0, 0)]]),
+    # edge interaction
+    ([(0, 0, 0), (1, 0, -1)], []),
+    ([(0, 0, 0), (0.5, 0, -1)], []),
+    ([(0, 0, 0), (2, 0, -2)], [[(1, 0), (2, 0)]]),
+    ([(1, 0, -1), (0, 0, 1)], [[(0.5, 0), (0, 0)]]),
+    ([(-1, 0, 1), (1, 0, -1)], [[(-1, 0), (0, 0)]]),
+    ([(-1, 0, 1), (2, 0, -2)], [[(-1, 0), (0, 0)], [(1, 0), (2, 0)]]),
+    ([(-1, 0, -1), (2, 0, 2)], None),
+    ([(-1, 0, -1), (1, 0, 1)], None),
+    ([(-1, 0, -1), (0.5, 0, 0.5)], None),
+    ([(-1, 0.5, -1), (2, 0.5, 2)], None),
+    ([(-1, 0.5, -1), (1, 0.5, 1)], None),
+    ([(-1, 0.5, -1), (0.5, 0.5, 0.5)], None),
+    ([(-1, 0.5, 1), (2, 0.5, -2)], [[(-1, 0.5), (0, 0.5)], [(0.5, 0.5), (2, 0.5)]]),
+    ([(-1, 0.5, 1), (0.1, 0.5, -0.1)], [[(-1, 0.5), (0, 0.5)]]),
+    ([(-1, 0.5, 1), (0.5, 0.5, -0.5)], [[(-1, 0.5), (0, 0.5)]]),
+    # regular intersection
+    ([(0.5, 0, 1), (0.5, 1, -1)], [[(0.5, 0), (0.5, 1)]]),
+    ([(0.5, -1, 3), (0.5, 1, -1)], [[(0.5, -1), (0.5, 1)]]),
+    ([(0.5, 0.1, 0.8), (0.5, 1, -1)], [[(0.5, 0.1), (0.5, 1)]]),
+    ([(0.5, 0, 1), (0.5, 0.8, -1)], [[(0.5, 0), (0.5, 0.4)], [(0.5, 0.5), (0.5, 0.8)]]),
+    ([(0, 0, -1), (1, 1, 3)], [[(0.25, 0.25), (1, 1)]]),
+    # intersection outside
+    ([(0.5, -1.5, -1), (0.5, 0.5, 1)], None),
+    ([(0.5, -1.5, 1), (0.5, 0.5, -1)], [[(0.5, -1.5), (0.5, 0)]]),
+    # short segment front
+    ([(0.5, 0.5, 1), (0.5, 0.5, 2)], []),  # currently just a point
+    ([(0.5, 0.5, 1), (0.4, 0.4, 2)], None),
+    ([(0.2, 0.2, 2), (5, 5, 5)], [[(0.2, 0.2), (5, 5)]]),
+    ([(2.5, 2.5, 1), (1.5, 3.5, 2)], None),
+    # short segment back
+    ([(0.5, 0.5, -1), (0.5, 0.5, -2)], []),  # currently just a point
+    ([(0.5, 0.5, -1), (0.4, 0.4, -2)], []),
+    ([(0.2, 0.2, -2), (5, 5, -5)], [[(0.5, 0.5), (5, 5)]]),
+    ([(2.5, 2.5, -1), (1.5, 3.5, -2)], None),
+]
 
 
 @pytest.mark.parametrize(("segment", "expected_masked_segment"), MASK_SEGMENT_TEST_DATA)
 def test_mask_segment(segment, expected_masked_segment):
-    triangle_array = np.array([[(0, 0, 0), (0, 1, 0), (1, 0, 0)]])
+    if expected_masked_segment is None:
+        exp_res = np.array([segment])[:, :, 0:2]
+    else:
+        exp_res = np.array(expected_masked_segment)
+    for triangle in itertools.permutations([(0, 0, 0), (0, 1, 0), (1, 0, 0)]):
+        for s in [segment, (segment[1], segment[0])]:
+            results = mask_segment(np.array(s), np.array([triangle]))
+            assert segment_list_equal(results[:, :, 0:2], exp_res)
 
-    results = mask_segment(np.array(segment), triangle_array)
 
-    assert len(results) == 1
-    assert results[0] == expected_masked_segment
+# In this test we consider only segment parallel to XY face, so the test can generate z
+# coordinates that are either below, on, or above the plane. Expected result pertains only to
+# the z < 0 case.
+MASK_SEGMENT_SEG_PARALLEL_TO_FACE_TEST_DATA = [
+    # no edge interaction
+    ([(0.5, -1), (0.5, 2)], [[(0.5, -1), (0.5, 0)], [(0.5, 0.5), (0.5, 2)]]),
+    ([(0.5, -1), (0.5, 0.1)], [[(0.5, -1), (0.5, 0)]]),
+    ([(0.5, 0.1), (0.5, 0.3)], []),
+    ([(2, -1), (2, 2)], [[(2, -1), (2, 2)]]),
+    # edge interaction
+    ([(0, 0), (0, 1)], []),
+    ([(1, 0), (0, 1)], []),
+    ([(1, 0), (0, 0)], []),
+    ([(0.8, 0), (0.2, 0)], []),
+    ([(2, 0), (0.2, 0)], [[(2, 0), (1, 0)]]),
+    ([(2, 0), (0, 0)], [[(2, 0), (1, 0)]]),
+    ([(2, -1), (-1, 2)], [[(2, -1), (1, 0)], [(0, 1), (-1, 2)]]),
+    # vertex interaction
+    ([(1, 0), (3, 0)], [[(1, 0), (3, 0)]]),
+    ([(1, 0), (3, 0.1)], [[(1, 0), (3, 0.1)]]),
+    ([(0, 0), (-1, 0)], [[(0, 0), (-1, 0)]]),
+    ([(0, 0), (0, -1)], [[(0, 0), (0, -1)]]),
+    ([(0, 0), (-1, -1)], [[(0, 0), (-1, -1)]]),
+    ([(-1, 1), (1, -1)], [[(-1, 1), (0, 0)], [(0, 0), (1, -1)]]),
+    ([(-0.5, 1), (0.5, -1)], [[(-0.5, 1), (0, 0)], [(0, 0), (0.5, -1)]]),
+    ([(1, 0), (0.1, 0.1)], []),
+    ([(0, 0), (0.5, 0.5)], []),
+    ([(0, 0), (0.7, 0.3)], []),
+]
+
+
+@pytest.mark.parametrize(
+    ("segment", "expected_masked_segment"), MASK_SEGMENT_SEG_PARALLEL_TO_FACE_TEST_DATA
+)
+def test_mask_segment_seg_parallel_to_face(segment, expected_masked_segment):
+    # We add z coordinates to the segment. In case of z = -1, the segment should be masked
+    # and the results as expected. Otherwise the segment shouldn't be masked and the result
+    # identical to input.
+    for triangle in itertools.permutations([(0, 0, 0), (0, 1, 0), (1, 0, 0)]):
+        for s in [segment, (segment[1], segment[0])]:
+            for z in [-1, 0, 1]:
+                seg = np.hstack((np.array(s), z * np.ones(shape=(2, 1))))
+
+                results = mask_segment(seg, np.array([triangle]))
+
+                if z == -1:
+                    assert segment_list_equal(
+                        np.array(expected_masked_segment), results[:, :, 0:2]
+                    )
+                else:
+                    assert segment_list_equal(np.array([s]), results[:, :, 0:2])
+
+
+def test_mask_segment_seg_parallel_to_cam_plane():
+    # TODO
+    # case where segment is parallel to cam plane and face is not
+    pass
