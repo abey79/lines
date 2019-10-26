@@ -24,9 +24,13 @@ from lines.math import (
     INT_VERTEX,
     DEGENERATE,
     mask_segment,
+    ATOL,
 )
 from lines.tables import CUBE_VERTICES, CUBE_SEGMENTS, CUBE_FACES
 from tests.utils import segment_list_equal
+
+
+FACTOR_LIST = [1e6, 1e3, 1, 1e-3, 1e-6]
 
 
 def test_vertices_matmul_empty():
@@ -337,11 +341,12 @@ TRIANGLES_OVERLAP_SEGMENT_2D_TEST_DATA = [
 ]
 
 
+@pytest.mark.parametrize("factor", FACTOR_LIST)
 @pytest.mark.parametrize(("s", "expected"), TRIANGLES_OVERLAP_SEGMENT_2D_TEST_DATA)
-def test_triangles_overlap_segment_2d(s, expected):
-    triangles = np.array(list(itertools.permutations([(1, 0), (0, 1), (0, 0)])))
+def test_triangles_overlap_segment_2d(s, expected, factor):
+    triangles = factor * np.array(list(itertools.permutations([(1, 0), (0, 1), (0, 0)])))
 
-    for segment in [np.array(s), np.array([s[1], s[0]])]:
+    for segment in [factor * np.array(s), factor * np.array([s[1], s[0]])]:
         if expected is None:
             assert np.all(triangles_overlap_segment_2d(triangles, segment, True))
             assert np.all(~triangles_overlap_segment_2d(triangles, segment, False))
@@ -406,23 +411,24 @@ SEGMENT_TRIANGLE_INTERSECTION_TEST_DATA = [
 ]
 
 
+@pytest.mark.parametrize("factor", FACTOR_LIST)
 @pytest.mark.parametrize(
     ("seg", "result", "intersection", "expected_r", "expected_s", "expected_t"),
     SEGMENT_TRIANGLE_INTERSECTION_TEST_DATA,
 )
 def test_segment_triangle_intersection(
-    seg, result, intersection, expected_r, expected_s, expected_t
+    seg, result, intersection, expected_r, expected_s, expected_t, factor
 ):
     base_triangle = [(0, 0, 0), (1, 0, 0), (0, 1, 0)]
     for triangle in itertools.permutations(base_triangle):
         for segment, invert_r in [(np.array(seg), False), (np.array([seg[1], seg[0]]), True)]:
             res, r, s, t, itrsct, _ = segment_triangle_intersection(
-                segment, np.array(triangle)
+                factor * segment, factor * np.array(triangle)
             )
 
             assert res == result
             if intersection is not None:
-                assert np.all(np.isclose(itrsct, np.array(intersection), atol=1e-14))
+                assert np.all(np.isclose(itrsct, factor * np.array(intersection), atol=1e-14))
             if expected_r is not None:
                 assert np.isclose(
                     r, expected_r if not invert_r else 1 - expected_r, atol=1e-14
@@ -474,8 +480,23 @@ def test_segments_are_equal():
     )
 
 
+def check_mask_segment(segment, expected_masked_segment, triangle, factor):
+    decimals = int(np.log10(factor) + np.log10(np.linalg.norm(segment)) + np.log10(ATOL))
+
+    if expected_masked_segment is None:
+        exp_res = np.array([segment])[:, :, 0:2]
+    else:
+        exp_res = np.array(expected_masked_segment)
+    for face in itertools.permutations(triangle):
+        for s in [segment, (segment[1], segment[0])]:
+            results = mask_segment(factor * np.array(s), factor * np.array([face]))
+            assert segment_list_equal(
+                results[:, :, 0:2].round(decimals), (factor * exp_res).round(decimals)
+            )
+
+
 # if expected result is None, the test assumes it is identical to input
-MASK_SEGMENT_TEST_DATA = [
+MASK_SEGMENT_TEST_DATA_FLAT_TRIANGLE = [
     # vertex interaction
     ([(-1, -1, -1), (0, 0, 0)], None),
     ([(-1, -1, 1), (0, 0, 0)], None),
@@ -524,16 +545,33 @@ MASK_SEGMENT_TEST_DATA = [
 ]
 
 
-@pytest.mark.parametrize(("segment", "expected_masked_segment"), MASK_SEGMENT_TEST_DATA)
-def test_mask_segment(segment, expected_masked_segment):
-    if expected_masked_segment is None:
-        exp_res = np.array([segment])[:, :, 0:2]
-    else:
-        exp_res = np.array(expected_masked_segment)
-    for triangle in itertools.permutations([(0, 0, 0), (0, 1, 0), (1, 0, 0)]):
-        for s in [segment, (segment[1], segment[0])]:
-            results = mask_segment(np.array(s), np.array([triangle]))
-            assert segment_list_equal(results[:, :, 0:2], exp_res)
+@pytest.mark.parametrize("factor", FACTOR_LIST)
+@pytest.mark.parametrize(
+    ("segment", "expected_masked_segment"), MASK_SEGMENT_TEST_DATA_FLAT_TRIANGLE
+)
+def test_mask_segment_flat_triangle(segment, expected_masked_segment, factor):
+    check_mask_segment(
+        segment, expected_masked_segment, [(0, 0, 0), (0, 1, 0), (1, 0, 0)], factor
+    )
+
+
+# if expected result is None, the test assumes it is identical to input
+MASK_SEGMENT_TEST_DATA_TILTED_TRIANGLE = [
+    # Intersection outside
+    ([(-1, -1, -1), (0, 0, 0)], None),
+    ([(-1, -1, 1), (0, 0, 0)], None),
+    # TODO: to be completed!
+]
+
+
+@pytest.mark.parametrize("factor", FACTOR_LIST)
+@pytest.mark.parametrize(
+    ("segment", "expected_masked_segment"), MASK_SEGMENT_TEST_DATA_TILTED_TRIANGLE
+)
+def test_mask_segment_tilted_triangle(segment, expected_masked_segment, factor):
+    check_mask_segment(
+        segment, expected_masked_segment, [(1, 1, 0), (1, -1, 0), (0, 0, 1)], factor
+    )
 
 
 # In this test we consider only segment parallel to XY face, so the test can generate z

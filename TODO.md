@@ -1,5 +1,10 @@
 # TODO
 
+
+## Shapes
+
+- rotate_XYZ should have deg parameter
+
 ## Skins
 
 - Switch to duck typing with proper Typing annotation instead of base class. This will enable to cleanly increase the 

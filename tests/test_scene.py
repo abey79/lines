@@ -1,8 +1,6 @@
 import pytest
 
-import numpy as np
-
-from lines import Scene, SegmentShape, TriangleShape, Pyramid
+from lines import Scene, SegmentShape, TriangleShape, Pyramid, StrippedCube
 
 
 @pytest.fixture(params=["v1", "v2"])
@@ -30,36 +28,27 @@ def test_no_segment(renderer_id):
     scene.render(renderer_id)
 
 
-# FIXME: use renderer_id
-def test_pyramid():
+def test_pyramid(renderer_id):
     scene = Scene()
     scene.add(Pyramid())
     scene.look_at((2, 6, 1.5), (0, 0, 0))
     scene.perspective(70, 0.1, 10)
-    rs = scene.render("v2", merge_lines=False)
+    rs = scene.render(renderer_id, merge_lines=False)
 
-    expected_idx = {1, 2, 5, 6, 7}
+    assert rs.find_indices() == {1, 2, 5, 6, 7}
 
-    idx = set()
-    for ls in rs.mls:
-        segment = np.array(ls)
-        res = np.all(
-            np.all(
-                np.logical_or(
-                    np.isclose(
-                        rs._projected_segments[:, :, 0:2],
-                        np.tile(segment.reshape((1, 2, 2)), (8, 1, 1)),
-                    ),
-                    np.isclose(
-                        rs._projected_segments[:, [1, 0], 0:2],
-                        np.tile(segment.reshape((1, 2, 2)), (8, 1, 1)),
-                    ),
-                ),
-                axis=1,
-            ),
-            axis=1,
-        )
 
-        assert np.sum(res) == 1
-        idx.add(np.argmax(res))
-    assert idx == expected_idx
+def test_city(renderer_id):
+    """
+    This test case appeared as problematic at some point
+    """
+    for i, j in [(0, 0), (-4, -2)]:
+        scene = Scene()
+        c = StrippedCube(scale=(1, 1, 1), translate=(i, j, 0.5))
+        scene.add(c)
+        scene.look_at((1.1, 0.8, 8.2), (0, 0.2, 0))
+        scene.perspective(90, 0.1, 10)
+        rs = scene.render(renderer_id, merge_lines=False)
+
+        expected_indices = {8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24}
+        assert rs.find_indices() == expected_indices

@@ -6,6 +6,9 @@ import numpy as np
 import shapely.ops
 from shapely.geometry import Polygon, asLineString
 
+RTOL = 1e-14
+ATOL = 1e-14
+
 
 def _validate_segments(segments: np.ndarray) -> None:
     if len(segments.shape) != 3 or segments.shape[1:] != (2, 3):
@@ -195,24 +198,40 @@ def triangles_overlap_segment_2d(
     t2t1 = -t1t2
     t0t2 = -t2t0
 
-    decimals = 14
-
-    f1 = (np.cross(t0t1, t0p0) * np.cross(t0t1, t0t2)).round(decimals)
-    f2 = (np.cross(t0t1, t0t2) * np.cross(t0t1, t0p1)).round(decimals)
-
-    f3 = (np.cross(t1t2, t1p0) * np.cross(t1t2, t1t0)).round(decimals)
-    f4 = (np.cross(t1t2, t1t0) * np.cross(t1t2, t1p1)).round(decimals)
-
-    f5 = (np.cross(t2t0, t2p0) * np.cross(t2t0, t2t1)).round(decimals)
-    f6 = (np.cross(t2t0, t2t1) * np.cross(t2t0, t2p1)).round(decimals)
-
     p0p1_cross_p0t0 = np.cross(p0p1, p0t0)
     p0p1_cross_p0t1 = np.cross(p0p1, p0t1)
     p0p1_cross_p0t2 = np.cross(p0p1, p0t2)
 
-    f7 = (p0p1_cross_p0t0 * p0p1_cross_p0t1).round(decimals)
-    f8 = (p0p1_cross_p0t1 * p0p1_cross_p0t2).round(decimals)
-    f9 = (p0p1_cross_p0t2 * p0p1_cross_p0t0).round(decimals)
+    f = np.stack(
+        (
+            np.cross(t0t1, t0p0) * np.cross(t0t1, t0t2),  # f1
+            np.cross(t0t1, t0t2) * np.cross(t0t1, t0p1),  # f2
+            np.cross(t1t2, t1p0) * np.cross(t1t2, t1t0),  # f3
+            np.cross(t1t2, t1t0) * np.cross(t1t2, t1p1),  # f4
+            np.cross(t2t0, t2p0) * np.cross(t2t0, t2t1),  # f5
+            np.cross(t2t0, t2t1) * np.cross(t2t0, t2p1),  # f6
+            p0p1_cross_p0t0 * p0p1_cross_p0t1,  # f7
+            p0p1_cross_p0t1 * p0p1_cross_p0t2,  # f8
+            p0p1_cross_p0t2 * p0p1_cross_p0t0,  # f9
+        ),
+        axis=0,
+    )
+
+    # Here we need to carefully compute the tolerance. All the f-numbers are products of 2
+    # cross-products, so in the order of the specific length to the power of 4.
+    f_atol = RTOL * (np.linalg.norm(p0p1) ** 4) * 1e2
+
+    f = np.where(np.isclose(f, 0, atol=f_atol), 0, f)
+
+    f1 = f[0]
+    f2 = f[1]
+    f3 = f[2]
+    f4 = f[3]
+    f5 = f[4]
+    f6 = f[5]
+    f7 = f[6]
+    f8 = f[7]
+    f9 = f[8]
 
     # /* If segment is strictly outside triangle, or triangle is strictly
     #  * apart from the line, we're not intersecting */
@@ -345,7 +364,7 @@ def segments_parallel_to_face(
     if p0.shape != (3,) or n.shape != (3,):
         raise ValueError(f"p0 and n must be of length 3")
 
-    if np.isclose(n[2], 0):
+    if np.isclose(n[2], 0, atol=ATOL, rtol=RTOL):
         raise ValueError(f"plane should not be parallel to z axis")
 
     # make sure n points up
@@ -360,7 +379,7 @@ def segments_parallel_to_face(
     output.fill(ParallelType.NOT_PARALLEL.value)
 
     # Test for parallelism: dot(sv, n) == 0
-    para_idx, = np.where(np.isclose(np.dot(sv, n), 0))
+    para_idx, = np.where(np.isclose(np.dot(sv, n), 0, atol=ATOL, rtol=RTOL))
 
     # dot(s0 - p0, n) is:
     # 0 for coincidence
@@ -368,7 +387,7 @@ def segments_parallel_to_face(
     # <0 if s0 is other side as n
 
     prod = np.dot(s0[para_idx] - p0, n)
-    idx1 = np.isclose(prod, 0)
+    idx1 = np.isclose(prod, 0, atol=ATOL, rtol=RTOL)
     idx2 = np.logical_and(~idx1, prod > 0)
     idx3 = np.logical_and(~idx1, prod < 0)
 
@@ -412,7 +431,7 @@ def segment_parallel_to_planes(
     output.fill(ParallelType.NOT_PARALLEL.value)
 
     # Test for parallelism: dot(sv, n) == 0
-    para_idx, = np.where(np.isclose(np.dot(n, sv), 0, atol=1e-16))
+    para_idx, = np.where(np.isclose(np.dot(n, sv), 0, atol=ATOL, rtol=RTOL))
 
     # dot(s0 - p0, n) is:
     # 0 for coincidence
@@ -422,7 +441,7 @@ def segment_parallel_to_planes(
     if len(para_idx) > 0:
         # prod = np.tensordot(s0 - p0[para_idx], n[para_idx], axes=(1, 1))
         prod = np.sum((s0 - p0[para_idx]) * n[para_idx], axis=1)
-        idx = np.isclose(prod, 0, atol=1e-16)
+        idx = np.isclose(prod, 0, atol=ATOL, rtol=RTOL)
         output[para_idx[idx]] = ParallelType.PARALLEL_COINCIDENT.value
         output[para_idx[np.logical_and(~idx, prod > 0)]] = ParallelType.PARALLEL_FRONT.value
         output[para_idx[np.logical_and(~idx, prod < 0)]] = ParallelType.PARALLEL_BACK.value
@@ -480,7 +499,7 @@ def mask_segments(segments: np.array, mask: np.array, diff: bool = True) -> np.a
         res = getattr(ls, op)(poly)
 
         # segments with identical start/stop location are sometime returned
-        if np.isclose(res.length, 0):
+        if np.isclose(res.length, 0, atol=ATOL, rtol=RTOL):
             continue
 
         if res.geom_type == "LineString":
@@ -610,14 +629,14 @@ def segment_triangle_intersection(segment, triangle):
     else:
         swap_st = False
 
-    #     if (n == (Vector)0)             // triangle is degenerate
-    #         return -1;                  // do not deal with this case
-    if np.linalg.norm(n) == 0:
-        return DEGENERATE, 0, 0, 0, (0, 0, 0), 0
-
     #     sv = R.P1 - R.P0;              // ray direction vector
     sv = segment[1] - segment[0]
     s0 = segment[0]
+
+    #     if (n == (Vector)0)             // triangle is degenerate
+    #         return -1;                  // do not deal with this case
+    if np.isclose(np.linalg.norm(n), 0, atol=ATOL):
+        return DEGENERATE, 0, 0, 0, (0, 0, 0), 0
 
     #     w0 = R.P0 - T.V0;
     w0 = s0 - triangle[0]
@@ -633,8 +652,9 @@ def segment_triangle_intersection(segment, triangle):
     #             return 2;
     #         else return 0;              // ray disjoint from plane
     #     }
-    if np.linalg.norm(b) < 1e-13:  # parallel testing could be integrated here
-        if np.isclose(a, 0, atol=1e-13):
+    atol = np.linalg.norm(sv) * RTOL
+    if np.isclose(np.linalg.norm(b), 0, atol=atol):
+        if np.isclose(a, 0, atol=atol):
             return INT_COPLANAR, None, None, None, None, 0
         elif a <= 0:
             return NO_INT_PARALLEL_FRONT, None, None, None, None, 0
@@ -645,9 +665,9 @@ def segment_triangle_intersection(segment, triangle):
     #     r = a / b;
     r = a / b
 
-    if np.isclose(r, 0, atol=1e-13):
+    if np.isclose(r, 0, atol=ATOL):
         r = 0
-    elif np.isclose(r, 1, atol=1e-13):
+    elif np.isclose(r, 1, atol=ATOL):
         r = 1
 
     #     if (r < 0.0)                    // ray goes away from triangle
@@ -688,9 +708,9 @@ def segment_triangle_intersection(segment, triangle):
     #     float s, t;
     #     s = (uv * wv - vv * wu) / D;
     s = (uv * wv - vv * wu) / d
-    if np.isclose(s, 0, atol=1e-14):
+    if np.isclose(s, 0, atol=ATOL):
         s = 0
-    elif np.isclose(s, 1, atol=1e-14):
+    elif np.isclose(s, 1, atol=ATOL):
         s = 1
 
     #     if (s < 0.0 || s > 1.0)         // I is outside T
@@ -704,14 +724,15 @@ def segment_triangle_intersection(segment, triangle):
     #     t = (uv * wu - uu * wv) / D;
     t = (uv * wu - uu * wv) / d
 
-    if np.isclose(t, 0, atol=1e-14):
+    if np.isclose(t, 0, atol=ATOL):
         t = 0
-    elif np.isclose(t, 1, atol=1e-14):
+    elif np.isclose(t, 1, atol=ATOL):
         t = 1
 
     st = s + t
-    if np.isclose(st, 1, atol=1e-14):
+    if np.isclose(st, 1, atol=ATOL):
         st = 1
+        t = 1 - s  # ensure consistency
 
     #     if (t < 0.0 || (s + t) > 1.0)  // I is outside T
     #         return 0;
@@ -721,17 +742,19 @@ def segment_triangle_intersection(segment, triangle):
         else:
             return NO_INT_OUTSIDE_FACE, r, s, t, intersection, b
 
+    new_intersection = triangle[0] + s * u + t * v
+
     if (s == 0 and t == 0) or (s == 1 and t == 0) or (s == 0 and t == 1):
         if swap_st:
-            return INT_VERTEX, r, t, s, intersection, b
+            return INT_VERTEX, r, t, s, new_intersection, b
         else:
-            return INT_VERTEX, r, s, t, intersection, b
+            return INT_VERTEX, r, s, t, new_intersection, b
 
     if s == 0 or t == 0 or st == 1:
         if swap_st:
-            return INT_EDGE, r, t, s, intersection, b
+            return INT_EDGE, r, t, s, new_intersection, b
         else:
-            return INT_EDGE, r, s, t, intersection, b
+            return INT_EDGE, r, s, t, new_intersection, b
 
     #     return 1;                       // I is in T
     if swap_st:
@@ -806,7 +829,7 @@ def mask_segment(segment: np.ndarray, faces: np.ndarray) -> np.ndarray:
                 ]
             )
             overlap = triangles_overlap_segment_2d(
-                subfaces, np.array(test_seg), accept_vertex_only=False
+                subfaces, test_seg, accept_vertex_only=False
             )
             if np.any(overlap):
                 mask.append(subfaces[np.argmax(overlap)])
@@ -823,7 +846,7 @@ def mask_segment(segment: np.ndarray, faces: np.ndarray) -> np.ndarray:
             elif b < 0:
                 test_seg = np.array([itrsct, segment[1]])
 
-            if np.linalg.norm(test_seg[1] - test_seg[0]) > 1e-14:
+            if ~np.isclose(np.linalg.norm(test_seg[1] - test_seg[0]), 0, atol=ATOL, rtol=RTOL):
                 if t == 0:
                     subfaces = np.array(
                         [(face[0], face[1], itrsct), (itrsct, face[1], face[2])]
@@ -839,8 +862,8 @@ def mask_segment(segment: np.ndarray, faces: np.ndarray) -> np.ndarray:
                 overlap = triangles_overlap_segment_2d(
                     subfaces, test_seg, accept_vertex_only=False
                 )
-                if np.any(overlap):
-                    mask.append(subfaces[np.argmax(overlap)])
+
+                mask.extend(subfaces[overlap])
         elif res == INT_VERTEX:
             # in that case we add the face to the mask if the rear half-segment 2D intersects
             # with the face
@@ -849,7 +872,7 @@ def mask_segment(segment: np.ndarray, faces: np.ndarray) -> np.ndarray:
             elif b < 0:
                 test_seg = np.array([itrsct, segment[1]])
 
-            if np.linalg.norm(test_seg[1] - test_seg[0]) > 1e-14:
+            if ~np.isclose(np.linalg.norm(test_seg[1] - test_seg[0]), 0, atol=ATOL, rtol=RTOL):
                 overlap = triangles_overlap_segment_2d(
                     np.array([face]), test_seg, accept_vertex_only=False
                 )
@@ -868,7 +891,7 @@ def mask_segment(segment: np.ndarray, faces: np.ndarray) -> np.ndarray:
     # TODO: cases where we might want to keep a point
     # - seg parallel to camera axis
     # - others?
-    if np.isclose(msk_seg.length, 0, atol=1e-14):
+    if np.isclose(msk_seg.length, 0, atol=ATOL, rtol=RTOL):
         # segments with identical start/stop location are sometime returned
         return np.empty(shape=(0, 2, 3))
     elif msk_seg.geom_type == "LineString":
