@@ -150,6 +150,11 @@ def triangles_overlap_segment_2d(
     """
     Compute which triangles overlap a segment, considering only 2D projection along Z axis.
     The input's Z data is disregarded and optional.
+
+    .. note::
+        This function's implementation is heavily inspired by this `GameDev StackExchange
+        question <https://gamedev.stackexchange.com/a/21110>`_
+
     :param triangles: (M x 3 x 2-3) triangles
     :param segment: (2 x 2-3) segment
     :param accept_vertex_only: if False, vertex only intersection are not accepted
@@ -161,14 +166,6 @@ def triangles_overlap_segment_2d(
 
     if not _validate_shape(segment, 2, (2, 3)):
         raise ValueError(f"segment array has shape {segment.shape} instead of (2, 2 or 3)")
-
-    """
-    https://gamedev.stackexchange.com/a/21110
-    if t0, t1 and t2 are all on the same side of line P0P1, return NOT INTERSECTING
-    if P0 AND P1 are on the other side of line t0t1 as t2, return NOT INTERSECTING
-    if P0 AND P1 are on the other side of line t1t2 as t0, return NOT INTERSECTING
-    if P0 AND P1 are on the other side of line t2t0 as t1, return NOT INTERSECTING
-    """
 
     p0 = segment[0, 0:2]
     p1 = segment[1, 0:2]
@@ -204,133 +201,81 @@ def triangles_overlap_segment_2d(
 
     f = np.stack(
         (
-            np.cross(t0t1, t0p0) * np.cross(t0t1, t0t2),  # f1
-            np.cross(t0t1, t0t2) * np.cross(t0t1, t0p1),  # f2
-            np.cross(t1t2, t1p0) * np.cross(t1t2, t1t0),  # f3
-            np.cross(t1t2, t1t0) * np.cross(t1t2, t1p1),  # f4
-            np.cross(t2t0, t2p0) * np.cross(t2t0, t2t1),  # f5
-            np.cross(t2t0, t2t1) * np.cross(t2t0, t2p1),  # f6
-            p0p1_cross_p0t0 * p0p1_cross_p0t1,  # f7
-            p0p1_cross_p0t1 * p0p1_cross_p0t2,  # f8
-            p0p1_cross_p0t2 * p0p1_cross_p0t0,  # f9
+            np.cross(t0t1, t0p0) * np.cross(t0t1, t0t2),
+            np.cross(t0t1, t0t2) * np.cross(t0t1, t0p1),
+            np.cross(t1t2, t1p0) * np.cross(t1t2, t1t0),
+            np.cross(t1t2, t1t0) * np.cross(t1t2, t1p1),
+            np.cross(t2t0, t2p0) * np.cross(t2t0, t2t1),
+            np.cross(t2t0, t2t1) * np.cross(t2t0, t2p1),
+            p0p1_cross_p0t0 * p0p1_cross_p0t1,
+            p0p1_cross_p0t1 * p0p1_cross_p0t2,
+            p0p1_cross_p0t2 * p0p1_cross_p0t0,
         ),
         axis=0,
     )
 
     # Here we need to carefully compute the tolerance. All the f-numbers are products of 2
     # cross-products, so in the order of the specific length to the power of 4.
-    f_atol = RTOL * (np.linalg.norm(p0p1) ** 4) * 1e2
-
+    f_atol = 1e-12 * (np.linalg.norm(p0p1) ** 4)
     f = np.where(np.isclose(f, 0, atol=f_atol), 0, f)
 
-    f1 = f[0]
-    f2 = f[1]
-    f3 = f[2]
-    f4 = f[3]
-    f5 = f[4]
-    f6 = f[5]
-    f7 = f[6]
-    f8 = f[7]
-    f9 = f[8]
-
-    # /* If segment is strictly outside triangle, or triangle is strictly
-    #  * apart from the line, we're not intersecting */
-    # if ((f1 < 0 && f2 < 0) || (f3 < 0 && f4 < 0) || (f5 < 0 && f6 < 0)
-    #       || (f7 > 0 && f8 > 0))
-    #     return NOT_INTERSECTING;
-
     not_intersecting = (
-        np.logical_and(f1 < 0, f2 < 0)
-        | np.logical_and(f3 < 0, f4 < 0)
-        | np.logical_and(f5 < 0, f6 < 0)
-        | np.logical_and(np.logical_and(f7 > 0, f8 > 0), f9 > 0)
+        np.logical_and(f[0] < 0, f[1] < 0)
+        | np.logical_and(f[2] < 0, f[3] < 0)
+        | np.logical_and(f[4] < 0, f[5] < 0)
+        | np.logical_and(np.logical_and(f[6] > 0, f[7] > 0), f[8] > 0)
     )
 
     if accept_vertex_only:
         return ~not_intersecting
     else:
-        fsgn = np.hstack([np.sign(f.reshape(len(f), 1)) for f in [f1, f2, f3, f4, f5, f6]])
+        fsgn = np.sign(f[0:6])
 
-        # /* If segment is aligned with one of the edges, we're overlapping */
-        # if ((f1 == 0 && f2 == 0) || (f3 == 0 && f4 == 0) || (f5 == 0 && f6 == 0))
-        #     return OVERLAPPING;
-
+        # This is False in cases a single vertex is touching
         overlapping = (
             np.logical_and(
-                np.logical_and(f1 == 0, f2 == 0),
+                np.logical_and(f[0] == 0, f[1] == 0),
                 ~np.logical_or(
                     np.logical_and(
-                        np.sum(fsgn[:, 2:4], axis=1) == 2, np.sum(fsgn[:, 4:6], axis=1) == -1
+                        np.sum(fsgn[2:4], axis=0) == 2, np.sum(fsgn[4:6], axis=0) == -1
                     ),
                     np.logical_and(
-                        np.sum(fsgn[:, 2:4], axis=1) == -1, np.sum(fsgn[:, 4:6], axis=1) == 2
+                        np.sum(fsgn[2:4], axis=0) == -1, np.sum(fsgn[4:6], axis=0) == 2
                     ),
                 ),
             )
             | np.logical_and(
-                np.logical_and(f3 == 0, f4 == 0),
+                np.logical_and(f[2] == 0, f[3] == 0),
                 ~np.logical_or(
                     np.logical_and(
-                        np.sum(fsgn[:, 0:2], axis=1) == 2, np.sum(fsgn[:, 4:6], axis=1) == -1
+                        np.sum(fsgn[0:2], axis=0) == 2, np.sum(fsgn[4:6], axis=0) == -1
                     ),
                     np.logical_and(
-                        np.sum(fsgn[:, 0:2], axis=1) == -1, np.sum(fsgn[:, 4:6], axis=1) == 2
+                        np.sum(fsgn[0:2], axis=0) == -1, np.sum(fsgn[4:6], axis=0) == 2
                     ),
                 ),
             )
             | np.logical_and(
-                np.logical_and(f5 == 0, f6 == 0),
+                np.logical_and(f[4] == 0, f[5] == 0),
                 ~np.logical_or(
                     np.logical_and(
-                        np.sum(fsgn[:, 0:2], axis=1) == 2, np.sum(fsgn[:, 2:4], axis=1) == -1
+                        np.sum(fsgn[0:2], axis=0) == 2, np.sum(fsgn[2:4], axis=0) == -1
                     ),
                     np.logical_and(
-                        np.sum(fsgn[:, 0:2], axis=1) == -1, np.sum(fsgn[:, 2:4], axis=1) == 2
+                        np.sum(fsgn[0:2], axis=0) == -1, np.sum(fsgn[2:4], axis=0) == 2
                     ),
                 ),
             )
         )
 
-        # overlapping = (
-        #     np.logical_and(
-        #         np.logical_and(f1 == 0, f2 == 0),
-        #         ~np.logical_or(
-        #             np.logical_and(f3f4 == 0, f5f6 > 0), np.logical_and(f3f4 > 0, f5f6 == 0)
-        #         ),
-        #     )
-        #     | np.logical_and(
-        #         np.logical_and(f3 == 0, f4 == 0),
-        #         ~np.logical_or(
-        #             np.logical_and(f1f2 == 0, f5f6 > 0), np.logical_and(f1f2 > 0, f5f6 == 0)
-        #         ),
-        #         ~np.logical_and(f1f2 == 0, f5f6 == 0),
-        #     )
-        #     | np.logical_and(
-        #         np.logical_and(f5 == 0, f6 == 0),
-        #         ~np.logical_or(
-        #             np.logical_and(f1f2 == 0, f3f4 > 0), np.logical_and(f1f2 > 0, f3f4 == 0)
-        #         ),
-        #     )
-        # )
-
-        # /* If segment is outside but not strictly, or triangle is apart but
-        #  * not strictly, we're touching */
-        # if ((f1 <= 0 && f2 <= 0) || (f3 <= 0 && f4 <= 0) || (f5 <= 0 && f6 <= 0)
-        #       || (f7 >= 0 && f8 >= 0))
-        #     return TOUCHING;
-
+        # this is True even when a single vertex is touched
         touching = (
-            np.logical_and(f1 <= 0, f2 <= 0)
-            | np.logical_and(f3 <= 0, f4 <= 0)
-            | np.logical_and(f5 <= 0, f6 <= 0)
-            | np.logical_and(np.logical_and(f7 >= 0, f8 >= 0), f9 >= 0)
+            np.logical_and(f[0] <= 0, f[1] <= 0)
+            | np.logical_and(f[2] <= 0, f[3] <= 0)
+            | np.logical_and(f[4] <= 0, f[5] <= 0)
+            | np.logical_and(np.logical_and(f[6] >= 0, f[7] >= 0), f[8] >= 0)
         )
 
-        # return ~np.logical_and(not_intersecting, np.logical_and(touching, ~overlapping))
-        # return ~np.logical_or(
-        #     not_intersecting,
-        #     np.logical_and(~not_intersecting, np.logical_and(touching, ~overlapping)),
-        # )
         return np.logical_and(~not_intersecting, np.logical_or(~touching, overlapping))
 
 
@@ -439,7 +384,6 @@ def segment_parallel_to_planes(
     # <0 if s0 is other side as n
 
     if len(para_idx) > 0:
-        # prod = np.tensordot(s0 - p0[para_idx], n[para_idx], axes=(1, 1))
         prod = np.sum((s0 - p0[para_idx]) * n[para_idx], axis=1)
         idx = np.isclose(prod, 0, atol=ATOL, rtol=RTOL)
         output[para_idx[idx]] = ParallelType.PARALLEL_COINCIDENT.value
@@ -795,7 +739,7 @@ def mask_segment(segment: np.ndarray, faces: np.ndarray) -> np.ndarray:
             INT_COPLANAR,
         ):
             # this face is not masking the segment
-            pass
+            continue
         elif res in (NO_INT_PARALLEL_BEHIND, NO_INT_SHORT_SEGMENT_BEHIND):
             # this face is masking the segment
             mask.append(face)
@@ -820,6 +764,8 @@ def mask_segment(segment: np.ndarray, faces: np.ndarray) -> np.ndarray:
                 test_seg = np.array([segment[0], itrsct])
             elif b < 0:
                 test_seg = np.array([itrsct, segment[1]])
+            else:
+                continue
 
             subfaces = np.array(
                 [
@@ -837,7 +783,7 @@ def mask_segment(segment: np.ndarray, faces: np.ndarray) -> np.ndarray:
                 logging.warning(
                     f"inconsistent INTERSECTION_INSIDE with segment {segment} and "
                     f"face {face}: no overlapping sub-face"
-                )
+                    )
         elif res == INT_EDGE:
             # in this case, itrsct defines two sub-faces, at least one should 2D-intersect with
             # the rear half-segment and should be added to the mask
@@ -845,6 +791,8 @@ def mask_segment(segment: np.ndarray, faces: np.ndarray) -> np.ndarray:
                 test_seg = np.array([segment[0], itrsct])
             elif b < 0:
                 test_seg = np.array([itrsct, segment[1]])
+            else:
+                continue
 
             if ~np.isclose(np.linalg.norm(test_seg[1] - test_seg[0]), 0, atol=ATOL, rtol=RTOL):
                 if t == 0:
@@ -871,6 +819,8 @@ def mask_segment(segment: np.ndarray, faces: np.ndarray) -> np.ndarray:
                 test_seg = np.array([segment[0], itrsct])
             elif b < 0:
                 test_seg = np.array([itrsct, segment[1]])
+            else:
+                continue
 
             if ~np.isclose(np.linalg.norm(test_seg[1] - test_seg[0]), 0, atol=ATOL, rtol=RTOL):
                 overlap = triangles_overlap_segment_2d(
