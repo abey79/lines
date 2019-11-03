@@ -59,7 +59,7 @@ def test_cubes_silhouette(renderer_id):
     # TODO: this test must be generalised to the silhouette of any available scene
     scene = Scene()
     for i in range(0, 3, 2):
-        for j in range(0, 3, 2):
+        for j in range(2, 3, 2):
             c = Cube(scale=(1, 1, 1), translate=(i, j, 0.5))
             scene.add(c)
 
