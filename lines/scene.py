@@ -10,8 +10,7 @@ from .math import (
     mask_segments,
     split_segments,
     segments_outside_triangle_2d,
-    mask_segment,
-)
+    mask_segment_parallel)
 from .rendered_scene import RenderedScene
 from .shapes import Node
 
@@ -180,7 +179,8 @@ class Scene(Node):
         results = []
         # for i, s in tqdm.tqdm(enumerate(all_segments), total=len(all_segments)):
         for s in tqdm.tqdm(all_segments):
-            results.append(mask_segment(s, all_faces))
+            results.append(mask_segment_parallel(s, all_faces))
+            _ = np.vstack(results)
         output = np.vstack(results)
 
         # Convert to 2D data

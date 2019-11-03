@@ -1,6 +1,7 @@
 import pytest
 
-from lines import Scene, SegmentShape, TriangleShape, Pyramid, StrippedCube
+from lines import Scene, SegmentShape, TriangleShape, Pyramid, StrippedCube, Cube, \
+    SilhouetteSkin
 
 
 @pytest.fixture(params=["v1", "v2"])
@@ -52,3 +53,20 @@ def test_city(renderer_id):
 
         expected_indices = {8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24}
         assert rs.find_indices() == expected_indices
+
+
+def test_cubes_silhouette(renderer_id):
+    # TODO: this test must be generalised to the silhouette of any available scene
+    scene = Scene()
+    for i in range(0, 3, 2):
+        for j in range(0, 3, 2):
+            c = Cube(scale=(1, 1, 1), translate=(i, j, 0.5))
+            scene.add(c)
+
+    scene.add(SilhouetteSkin(keep_segments=False))
+    scene.look_at((25, 22.5, 15), (0, 0, 0))
+    scene.perspective(50, 0.1, 10)
+    rs = scene.render(renderer_id, merge_lines=False)
+
+    # by definition of a silhouette scene, every single segment must go through
+    assert rs.find_indices() == set(range(len(rs._projected_segments)))

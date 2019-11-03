@@ -4,6 +4,7 @@ import pickle
 import numpy as np
 import pytest
 
+# noinspection PyProtectedMember
 from lines.math import (
     vertices_matmul,
     segments_parallel_to_face,
@@ -25,9 +26,12 @@ from lines.math import (
     DEGENERATE,
     mask_segment,
     ATOL,
+    segment_triangles_intersection,
+    mask_segment_parallel,
+    _validate_shape,
 )
 from lines.tables import CUBE_VERTICES, CUBE_SEGMENTS, CUBE_FACES
-from tests.utils import segment_list_equal
+from .utils import segment_list_equal
 
 
 FACTOR_LIST = [1e6, 1e3, 1, 1e-3, 1e-6]
@@ -355,6 +359,33 @@ def test_triangles_overlap_segment_2d(s, expected, factor):
             assert np.all(triangles_overlap_segment_2d(triangles, segment, False) == expected)
 
 
+def segment_triangles_intersection_wrapper(segment, triangle):
+    """
+    This function wraps ``segment_triangles_intersection()`` to make it compatible with
+    ``segment_triangle_intersection()``.
+    """
+    res = 0
+    r = 0.0
+    s = 0.0
+    t = 0.0
+    b = 0.0
+    itrsct = np.empty(3)
+
+    # noinspection PyUnusedLocal
+    def callback(seg, triangles, rres, rr, ss, tt, bb, iitrsct):
+        assert len(triangles) == 1
+        nonlocal res, r, s, t, b, itrsct
+        res = rres
+        r = rr
+        s = ss
+        t = tt
+        b = bb
+        itrsct = iitrsct
+
+    segment_triangles_intersection(segment, np.array([triangle]), callback)
+    return res, r, s, t, itrsct, b
+
+
 SEGMENT_TRIANGLE_INTERSECTION_TEST_DATA = [
     # 0: parallel front
     ([(0.5, -0.5, 1), (0.5, 2, 1)], NO_INT_PARALLEL_FRONT, None, None, None, None),
@@ -411,20 +442,21 @@ SEGMENT_TRIANGLE_INTERSECTION_TEST_DATA = [
 ]
 
 
+@pytest.mark.parametrize(
+    "func", (segment_triangle_intersection, segment_triangles_intersection_wrapper)
+)
 @pytest.mark.parametrize("factor", FACTOR_LIST)
 @pytest.mark.parametrize(
     ("seg", "result", "intersection", "expected_r", "expected_s", "expected_t"),
     SEGMENT_TRIANGLE_INTERSECTION_TEST_DATA,
 )
 def test_segment_triangle_intersection(
-    seg, result, intersection, expected_r, expected_s, expected_t, factor
+    func, seg, result, intersection, expected_r, expected_s, expected_t, factor
 ):
     base_triangle = [(0, 0, 0), (1, 0, 0), (0, 1, 0)]
     for triangle in itertools.permutations(base_triangle):
         for segment, invert_r in [(np.array(seg), False), (np.array([seg[1], seg[0]]), True)]:
-            res, r, s, t, itrsct, _ = segment_triangle_intersection(
-                factor * segment, factor * np.array(triangle)
-            )
+            res, r, s, t, itrsct, _ = func(factor * segment, factor * np.array(triangle))
 
             assert res == result
             if intersection is not None:
@@ -442,13 +474,19 @@ def test_segment_triangle_intersection(
                     assert np.isclose(t, expected_t, atol=1e-14)
 
 
-def test_segment_triangle_intersection_degenerate():
+@pytest.mark.parametrize(
+    "func", (segment_triangle_intersection, segment_triangles_intersection_wrapper)
+)
+def test_segment_triangle_intersection_degenerate(func):
     triangle = np.array([(0, 0, 0), (1, 1, 1), (2, 2, 2)])
-    res, _, _, _, _, _ = segment_triangle_intersection(np.random.rand(2, 3), triangle)
+    res, _, _, _, _, _ = func(np.random.rand(2, 3), triangle)
     assert res == DEGENERATE
 
 
-def test_segment_triangle_intersection_vertex_int_numerical_error(root_directory):
+@pytest.mark.parametrize(
+    "func", (segment_triangle_intersection, segment_triangles_intersection_wrapper)
+)
+def test_segment_triangle_intersection_vertex_int_numerical_error(func, root_directory):
     """
     This is a particular case of encountered during debugging that highlighted numerical
     error issues
@@ -457,12 +495,12 @@ def test_segment_triangle_intersection_vertex_int_numerical_error(root_directory
         root_directory + "/tests/fixtures/vertex_intersection_numerical_error.pickle", "rb"
     ) as f:
         m = pickle.load(f)
-    res, _, _, _, itrsct, _ = segment_triangle_intersection(m["segment"], m["face"])
+    res, _, _, _, itrsct, _ = func(m["segment"], m["face"])
     assert res == INT_VERTEX
     assert np.all(np.isclose(itrsct, m["segment"][1]))
 
 
-def test_segments_are_equal():
+def test_segment_list_equal():
     # quick and dirty test to make sure the test function works
     assert segment_list_equal(
         np.array([[(1, 2), (3, 4)], [(5, 6), (7, 8)]]),
@@ -480,7 +518,7 @@ def test_segments_are_equal():
     )
 
 
-def check_mask_segment(segment, expected_masked_segment, triangle, factor):
+def check_mask_segment(func, segment, expected_masked_segment, triangle, factor):
     decimals = int(np.log10(factor) + np.log10(np.linalg.norm(segment)) + np.log10(ATOL))
 
     if expected_masked_segment is None:
@@ -489,7 +527,9 @@ def check_mask_segment(segment, expected_masked_segment, triangle, factor):
         exp_res = np.array(expected_masked_segment)
     for face in itertools.permutations(triangle):
         for s in [segment, (segment[1], segment[0])]:
-            results = mask_segment(factor * np.array(s), factor * np.array([face]))
+            results = func(
+                factor * np.array(s, dtype=float), factor * np.array([face], dtype=float)
+            )
             assert segment_list_equal(
                 results[:, :, 0:2].round(decimals), (factor * exp_res).round(decimals)
             )
@@ -545,13 +585,14 @@ MASK_SEGMENT_TEST_DATA_FLAT_TRIANGLE = [
 ]
 
 
+@pytest.mark.parametrize("func", (mask_segment, mask_segment_parallel))
 @pytest.mark.parametrize("factor", FACTOR_LIST)
 @pytest.mark.parametrize(
     ("segment", "expected_masked_segment"), MASK_SEGMENT_TEST_DATA_FLAT_TRIANGLE
 )
-def test_mask_segment_flat_triangle(segment, expected_masked_segment, factor):
+def test_mask_segment_flat_triangle(func, segment, expected_masked_segment, factor):
     check_mask_segment(
-        segment, expected_masked_segment, [(0, 0, 0), (0, 1, 0), (1, 0, 0)], factor
+        func, segment, expected_masked_segment, [(0, 0, 0), (0, 1, 0), (1, 0, 0)], factor
     )
 
 
@@ -579,13 +620,14 @@ MASK_SEGMENT_TEST_DATA_TILTED_TRIANGLE = [
 ]
 
 
+@pytest.mark.parametrize("func", (mask_segment, mask_segment_parallel))
 @pytest.mark.parametrize("factor", FACTOR_LIST)
 @pytest.mark.parametrize(
     ("segment", "expected_masked_segment"), MASK_SEGMENT_TEST_DATA_TILTED_TRIANGLE
 )
-def test_mask_segment_tilted_triangle(segment, expected_masked_segment, factor):
+def test_mask_segment_tilted_triangle(func, segment, expected_masked_segment, factor):
     check_mask_segment(
-        segment, expected_masked_segment, [(1, 1, 0), (1, -1, 0), (0, 0, 1)], factor
+        func, segment, expected_masked_segment, [(1, 1, 0), (1, -1, 0), (0, 0, 1)], factor
     )
 
 
@@ -620,19 +662,20 @@ MASK_SEGMENT_SEG_PARALLEL_TO_FACE_TEST_DATA = [
 ]
 
 
+@pytest.mark.parametrize("func", (mask_segment, mask_segment_parallel))
 @pytest.mark.parametrize(
     ("segment", "expected_masked_segment"), MASK_SEGMENT_SEG_PARALLEL_TO_FACE_TEST_DATA
 )
-def test_mask_segment_seg_parallel_to_face(segment, expected_masked_segment):
+def test_mask_segment_seg_parallel_to_face(func, segment, expected_masked_segment):
     # We add z coordinates to the segment. In case of z = -1, the segment should be masked
     # and the results as expected. Otherwise the segment shouldn't be masked and the result
     # identical to input.
     for triangle in itertools.permutations([(0, 0, 0), (0, 1, 0), (1, 0, 0)]):
         for s in [segment, (segment[1], segment[0])]:
             for z in [-1, 0, 1]:
-                seg = np.hstack((np.array(s), z * np.ones(shape=(2, 1))))
+                seg = np.hstack((np.array(s, dtype=float), z * np.ones(shape=(2, 1))))
 
-                results = mask_segment(seg, np.array([triangle]))
+                results = func(seg, np.array([triangle]))
 
                 if z == -1:
                     assert segment_list_equal(
@@ -646,3 +689,89 @@ def test_mask_segment_seg_parallel_to_cam_plane():
     # TODO
     # case where segment is parallel to cam plane and face is not
     pass
+
+
+def segment_triangles_intersection_validation_callback(
+    segment, triangles, res, r, s, t, b, itrsct
+):
+    assert _validate_shape(segment, 2, 3)
+    assert _validate_shape(triangles, None, 3, 3)
+    assert len(triangles) > 0
+
+    for i, triangle in enumerate(triangles):
+        if i == 0 and res == 7:
+            print("hello")
+
+        e_res, e_r, e_s, e_t, e_itrsct, e_b = segment_triangle_intersection(segment, triangle)
+
+        assert e_res == res
+
+        if e_res in [NO_INT_SHORT_SEGMENT_FRONT, NO_INT_SHORT_SEGMENT_BEHIND]:
+            assert e_r == r[i]
+
+        if e_res in [NO_INT_OUTSIDE_FACE, INT_VERTEX, INT_EDGE, INT_INSIDE]:
+            assert e_r == r[i]
+            if e_res != NO_INT_OUTSIDE_FACE:
+                assert e_s == s[i]
+                assert e_t == t[i]
+            assert e_b == b[i]
+            assert np.all(np.isclose(e_itrsct, itrsct[i]))
+
+
+def test_segment_triangles_intersection_random():
+    k = 10
+    n = 100
+    segments = np.random.rand(k, 2, 3)
+    triangles = np.random.rand(n, 3, 3)
+
+    for segment in segments:
+        segment_triangles_intersection(
+            segment, triangles, segment_triangles_intersection_validation_callback
+        )
+
+
+def test_segment_triangles_intersection_quantized_random():
+    # We apply strong quantization on random value to promote the emergence of degenerate and
+    # parallel segment/face pairs
+    k = 5
+    n = 1000
+    segments = np.around(5 * np.random.rand(k, 2, 3))
+    triangles = np.around(5 * np.random.rand(n, 3, 3))
+
+    for segment in segments:
+        segment_triangles_intersection(
+            segment, triangles, segment_triangles_intersection_validation_callback
+        )
+
+
+def test_mask_segment_random():
+    k = 5
+    n = 200
+    segments = np.random.rand(k, 2, 3)
+    triangles = np.random.rand(n, 3, 3)
+
+    for segment in segments:
+        res1 = mask_segment(segment, triangles)
+        res2 = mask_segment_parallel(segment, triangles)
+
+        assert segment_list_equal(res1, res2)
+
+
+def test_mask_segment_quantized_random():
+    # TODO: this test fails in a specific case!
+    k = 1
+    n = 5
+    np.random.seed(12)
+
+    for i in [7118]:  # range(10000):
+        np.random.seed(i)
+        segments = np.around(5 * np.random.rand(k, 2, 3))
+        triangles = np.around(5 * np.random.rand(n, 3, 3))
+
+        for segment in segments:
+            res1 = mask_segment(segment, triangles)
+            res2 = mask_segment_parallel(segment, triangles)
+
+            assert segment_list_equal(
+                res1[:, :, 0:2].round(decimals=12), res2[:, :, 0:2].round(decimals=12)
+            )
