@@ -5,7 +5,7 @@ from typing import Tuple
 import numpy as np
 import pywavefront
 
-from lines import Scene, PolyShape, SilhouetteSkin
+from lines import PolyShape, Scene, SilhouetteSkin
 
 
 class OBJShape(PolyShape):
@@ -34,16 +34,18 @@ class OBJShape(PolyShape):
 def main(silhouette: bool = False):
     scene = Scene()
 
-    obj = OBJShape("deer.obj")
+    obj = OBJShape("cow.obj")
     obj.rotate_x(-math.pi / 2)
     obj.rotate_z(-math.pi / 2)
     if silhouette:
         obj.add(SilhouetteSkin(keep_segments=False))
 
     scene.add(obj)
-    scene.look_at((2, 2, 2), (0, 0, 0.5))
-    scene.perspective(25, 0.1, 10)
-    scene.render().show()
+    scene.look_at((0.5, 2, 0.2), (0, 0, 0))
+    scene.perspective(40, 0.1, 10)
+    rs = scene.render("v2")
+    rs.show()
+    rs.save("cow_new.svg")
 
 
 if __name__ == "__main__":

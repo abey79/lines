@@ -3,6 +3,7 @@ numpy
 trimesh[easy]
 shapely[vectorized]
 svgwrite
+pathos
 tqdm
 
 # Testing requirements
@@ -15,3 +16,5 @@ pywavefront
 
 # Dev/test requirements
 black
+isort
+mypy

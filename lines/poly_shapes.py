@@ -66,7 +66,7 @@ class Cube(PolyShape):
     """
 
     def __init__(self, **kwargs):
-        from .tables import CUBE_VERTICES, CUBE_SEGMENTS, CUBE_FACES
+        from .tables import CUBE_FACES, CUBE_SEGMENTS, CUBE_VERTICES
 
         super().__init__(CUBE_VERTICES, CUBE_SEGMENTS, CUBE_FACES, **kwargs)
 
@@ -77,7 +77,7 @@ class Pyramid(PolyShape):
     """
 
     def __init__(self, **kwargs):
-        from .tables import PYRAMID_VERTICES, PYRAMID_SEGMENTS, PYRAMID_FACES
+        from .tables import PYRAMID_FACES, PYRAMID_SEGMENTS, PYRAMID_VERTICES
 
         super().__init__(PYRAMID_VERTICES, PYRAMID_SEGMENTS, PYRAMID_FACES, **kwargs)
 

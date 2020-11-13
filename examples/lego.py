@@ -1,4 +1,4 @@
-from lines import Scene, Cube, Node, Cylinder
+from lines import Cube, Cylinder, Node, Scene
 
 
 def main():

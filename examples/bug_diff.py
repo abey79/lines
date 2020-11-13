@@ -1,9 +1,9 @@
 # https://github.com/Toblerity/Shapely/issues/780
 
-import numpy as np
 import matplotlib.pyplot as plt
-from shapely.wkt import loads, dumps
+import numpy as np
 import shapely.geos
+from shapely.wkt import dumps, loads
 
 
 def main():
@@ -15,8 +15,8 @@ def main():
     )
     result = ls.difference(p)
 
-    plt.plot(*ls.coords.xy, 'r-')
-    plt.plot(*p.boundary.xy, 'g-')
+    plt.plot(*ls.coords.xy, "r-")
+    plt.plot(*p.boundary.xy, "g-")
     plt.axis("equal")
     plt.show()
 
@@ -24,7 +24,6 @@ def main():
     print(np.array(result) == np.array(ls))
     print(shapely.geos.geos_version_string)
     print(shapely.__version__)
-
 
 
 if __name__ == "__main__":
