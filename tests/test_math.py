@@ -517,17 +517,17 @@ def segment_triangles_intersection_validation_callback(
 
         e_res, e_r, e_s, e_t, e_itrsct, e_b = segment_triangle_intersection(segment, triangle)
 
-        assert e_res == res
+        assert np.isclose(e_res, res, rtol=1e-10)
 
         if e_res in [NO_INT_SHORT_SEGMENT_FRONT, NO_INT_SHORT_SEGMENT_BEHIND]:
-            assert e_r == r[i]
+            assert np.isclose(e_r, r[i], rtol=1e-10)
 
         if e_res in [NO_INT_OUTSIDE_FACE, INT_VERTEX, INT_EDGE, INT_INSIDE]:
-            assert e_r == r[i]
+            assert np.isclose(e_r, r[i], rtol=1e-10)
             if e_res != NO_INT_OUTSIDE_FACE:
-                assert e_s == s[i]
-                assert e_t == t[i]
-            assert e_b == b[i]
+                assert np.isclose(e_s, s[i], rtol=1e-10)
+                assert np.isclose(e_t, t[i], rtol=1e-10)
+            assert np.isclose(e_b, b[i], rtol=1e-10)
             assert np.all(np.isclose(e_itrsct, itrsct[i]))
 
 
