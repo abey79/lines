@@ -6,11 +6,10 @@ purposes.
 import enum
 
 import numpy as np
-
 from shapely.geometry import Polygon, asLineString
 
 # noinspection PyProtectedMember
-from lines.math import _validate_shape, ATOL, RTOL
+from lines.math import ATOL, RTOL, _validate_shape
 
 
 def _validate_segments(segments: np.ndarray) -> None:
