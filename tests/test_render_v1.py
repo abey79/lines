@@ -2,10 +2,10 @@ import numpy as np
 import pytest
 
 from .render_v1 import (
-    segments_outside_triangle_2d,
-    segments_parallel_to_face,
     ParallelType,
     mask_segments,
+    segments_outside_triangle_2d,
+    segments_parallel_to_face,
     split_segments,
 )
 

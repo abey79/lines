@@ -65,10 +65,17 @@ scene.look_at(
     (0, 0, 0),  # this is where the camera is looking
 )
 scene.perspective(50, 0.1, 20)  # setup a perspective projection with 50° FOV
-mls = scene.render()  # don't expect much of this until you add some shapes to the scene
+rendered_scene = scene.render()  # don't expect much of this until you add some shapes to the scene
 ```
 
-_TODO: describe what render() returns_
+The `render()` member function returns an instance of the`RenderedScene` class. This object contains among other things
+the result of the rendering process (a collection of vector data). Its primary purpose is to display and export the 
+rendered data.
+
+```python
+rendered_scene.show()  # use matplotlib to display the rendered scene
+rendered_scene.save('my_render.svg')  # export the rendered scene to a svg file
+```
 
 ### Shapes
 

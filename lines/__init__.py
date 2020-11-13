@@ -1,13 +1,13 @@
-from .scene import Scene
-from .shapes import Shape, Node
 from .poly_shapes import (
-    PolyShape,
-    SegmentShape,
-    TriangleShape,
     Cube,
-    Pyramid,
     Cylinder,
+    PolyShape,
+    Pyramid,
+    SegmentShape,
     StrippedCube,
+    TriangleShape,
 )
-from .skins import Skin, SilhouetteSkin
 from .rendered_scene import RenderedScene
+from .scene import Scene
+from .shapes import Node, Shape
+from .skins import SilhouetteSkin, Skin

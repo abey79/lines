@@ -1,12 +1,11 @@
-from lines import Scene
-from lines import SegmentShape, TriangleShape
+from lines import Scene, SegmentShape, TriangleShape
 
 
 def main():
     scene = Scene()
     scene.add(SegmentShape((0, -2, 1), (0, 1, 1)))
-    scene.add(SegmentShape((1, -.1, 0.5), (-3, -.1, 0.5)))  # behind
-    scene.add(SegmentShape((-3, .1, 0.8), (1, .1, 0.8)))
+    scene.add(SegmentShape((1, -0.1, 0.5), (-3, -0.1, 0.5)))  # behind
+    scene.add(SegmentShape((-3, 0.1, 0.8), (1, 0.1, 0.8)))
 
     scene.add(TriangleShape((1, 0, 0), (-1, 0, 0), (0, 0, 2)))
 

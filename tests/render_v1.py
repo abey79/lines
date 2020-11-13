@@ -6,11 +6,10 @@ purposes.
 import enum
 
 import numpy as np
-
 from shapely.geometry import Polygon, asLineString
 
 # noinspection PyProtectedMember
-from lines.math import _validate_shape, ATOL, RTOL
+from lines.math import ATOL, RTOL, _validate_shape
 
 
 def _validate_segments(segments: np.ndarray) -> None:
@@ -63,7 +62,7 @@ def segments_parallel_to_face(
     output.fill(ParallelType.NOT_PARALLEL.value)
 
     # Test for parallelism: dot(sv, n) == 0
-    para_idx, = np.where(np.isclose(np.dot(sv, n), 0, atol=ATOL, rtol=RTOL))
+    (para_idx,) = np.where(np.isclose(np.dot(sv, n), 0, atol=ATOL, rtol=RTOL))
 
     # dot(s0 - p0, n) is:
     # 0 for coincidence
@@ -115,7 +114,7 @@ def segment_parallel_to_planes(
     output.fill(ParallelType.NOT_PARALLEL.value)
 
     # Test for parallelism: dot(sv, n) == 0
-    para_idx, = np.where(np.isclose(np.dot(n, sv), 0, atol=ATOL, rtol=RTOL))
+    (para_idx,) = np.where(np.isclose(np.dot(n, sv), 0, atol=ATOL, rtol=RTOL))
 
     # dot(s0 - p0, n) is:
     # 0 for coincidence
@@ -197,7 +196,7 @@ def mask_segments(segments: np.array, mask: np.array, diff: bool = True) -> np.a
         # Some z-coordinate are being erroneously affected by the difference. This ugly
         # hack attempts to restore them.
         for s in segments:
-            idx, = np.where(np.all(np.all(s[:, 0:2] == res[:, :, 0:2], axis=2), axis=1))
+            (idx,) = np.where(np.all(np.all(s[:, 0:2] == res[:, :, 0:2], axis=2), axis=1))
             res[idx, :, 2] = s[:, 2]
 
         return res
@@ -231,7 +230,7 @@ def split_segments(
 
     behind = np.logical_and(d0 < 0, d1 < 0)
     front = np.logical_and(d0 >= 0, d1 >= 0)
-    split_idx, = np.where(np.logical_and(~behind, ~front))
+    (split_idx,) = np.where(np.logical_and(~behind, ~front))
 
     # Segment parametrized as: s0 + s * sv, where sv = s1 - s0, and s in [0, 1]
     # Plane parametrized as: p0 and n
@@ -385,14 +384,14 @@ def render_v1(all_segments, all_faces) -> np.ndarray:
         # Check parallelism
         para = segments_parallel_to_face(segments_to_process, p0, n)
 
-        idx_masked, = np.where(para == ParallelType.PARALLEL_BACK.value)
-        idx_unmasked, = np.where(
+        (idx_masked,) = np.where(para == ParallelType.PARALLEL_BACK.value)
+        (idx_unmasked,) = np.where(
             np.logical_or(
                 para == ParallelType.PARALLEL_FRONT.value,
                 para == ParallelType.PARALLEL_COINCIDENT.value,
             )
         )
-        idx_split, = np.where(para == ParallelType.NOT_PARALLEL.value)
+        (idx_split,) = np.where(para == ParallelType.NOT_PARALLEL.value)
 
         # Split the required segments in halves.
         segs_front, segs_back = split_segments(segments_to_process[idx_split], p0, n)

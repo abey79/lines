@@ -27,6 +27,38 @@ def _validate_shape(a: np.ndarray, *args):
     return True
 
 
+def _crop_dimension(segments: np.ndarray, dim: int) -> np.ndarray:
+    """
+    Crop `segments` so that their `dim`-th dimension data is contained in [-1, 1]
+    :param segments: Mx2x3 array of segment
+    :param dim: dimension to crop (0, 1 or 2)
+    :return: Nx2x3 array of segment whose `dim`-th dimension is cropped to [-1, 1]
+    """
+    excluded_idx = ((segments[:, 0, dim] < -1) & (segments[:, 1, dim] < -1)) | (
+        (segments[:, 0, dim] > 1) & (segments[:, 1, dim] > 1)
+    )
+
+    segments = segments[~excluded_idx, ...]
+
+    crop_start_idx = (segments[:, 0, dim] < -1) | (segments[:, 0, dim] > 1)
+
+
+def crop_frustum(segments: np.ndarray) -> np.ndarray:
+    """
+    Crop `segments` to the 3D [-1, 1] frustum.
+
+    :param segments: Mx2x3 array of segments
+    :return: Nx2x3 array of segments cropped to the 3x[-1, 1] frustum
+    """
+    if not _validate_shape(segments, None, 2, 3):
+        raise ValueError(f"segments shape is {segments.shape} instead of (M, 2, 3)")
+
+    output = _crop_dimension(segments, 0)
+    output = _crop_dimension(output, 1)
+    output = _crop_dimension(output, 2)
+    return output
+
+
 def vertices_matmul(vertices: np.ndarray, matrix: np.ndarray) -> np.ndarray:
     """
     Apply a matrix multiplication to all vertices in the input array. The vertices coordinates
@@ -805,7 +837,7 @@ def mask_segment_parallel(segment: np.ndarray, faces: np.ndarray) -> np.ndarray:
             # in this case, itrsct defines two sub-faces, at least one should 2D-intersect with
             # the rear half-segment and should be added to the mask
 
-            idx, = np.nonzero(
+            (idx,) = np.nonzero(
                 ~np.isclose(
                     np.linalg.norm(half_segments[:, 1] - half_segments[:, 0], axis=1),
                     0,

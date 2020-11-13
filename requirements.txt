@@ -1,8 +1,9 @@
 # Base requirements
 numpy
-trimesh[easy]
+#trimesh[easy]  # installs rtree, which fails in gh CI
 shapely[vectorized]
 svgwrite
+pathos
 tqdm
 
 # Testing requirements
@@ -15,3 +16,5 @@ pywavefront
 
 # Dev/test requirements
 black
+isort
+mypy

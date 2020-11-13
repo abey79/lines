@@ -3,11 +3,13 @@ from typing import Sequence
 
 import numpy as np
 import tqdm
+from pathos.multiprocessing import ProcessingPool as Pool
+
+from tests.render_v1 import mask_segments, render_v1
 
 from .math import mask_segment
 from .rendered_scene import RenderedScene
 from .shapes import Node
-from tests.render_v1 import mask_segments, render_v1
 
 
 class Scene(Node):
@@ -92,11 +94,13 @@ class Scene(Node):
             return np.empty(shape=(0, 2, 2))
 
         # For each segment, hide some or all of it based on faces that may be in front.
-        results = []
-        # for i, s in tqdm.tqdm(enumerate(all_segments), total=len(all_segments)):
-        for s in tqdm.tqdm(all_segments):
-            results.append(mask_segment_parallel(s, all_faces))
-            _ = np.vstack(results)
+        with Pool() as p:
+            results = list(
+                tqdm.tqdm(
+                    p.imap(lambda s: mask_segment(s, all_faces), all_segments),
+                    total=len(all_segments),
+                )
+            )
         output = np.vstack(results)
 
         # Convert to 2D data

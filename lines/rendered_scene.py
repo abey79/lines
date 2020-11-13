@@ -1,5 +1,5 @@
 import logging
-from typing import Union, Sequence, Set
+from typing import Sequence, Set, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
