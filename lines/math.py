@@ -1,9 +1,9 @@
-import collections
 import logging
+from collections.abc import Iterable
 
 import numpy as np
 import shapely.ops
-from shapely.geometry import Polygon, asLineString
+from shapely.geometry import LineString, Polygon
 
 RTOL = 1e-14
 ATOL = 1e-14
@@ -17,7 +17,7 @@ def _validate_shape(a: np.ndarray, *args):
         if isinstance(v, int):
             if s != v:
                 return False
-        elif isinstance(v, collections.abc.Iterable):
+        elif isinstance(v, Iterable):
             if s not in v:
                 return False
         else:
@@ -41,6 +41,8 @@ def _crop_dimension(segments: np.ndarray, dim: int) -> np.ndarray:
     segments = segments[~excluded_idx, ...]
 
     crop_start_idx = (segments[:, 0, dim] < -1) | (segments[:, 0, dim] > 1)
+
+    # TODO: finish this!
 
 
 def crop_frustum(segments: np.ndarray) -> np.ndarray:
@@ -743,7 +745,7 @@ def mask_segment(segment: np.ndarray, faces: np.ndarray) -> np.ndarray:
         p = Polygon(f[:, 0:2].round(decimals=14))
         if p.is_valid:
             polys.append(p)
-    msk_seg = asLineString(segment).difference(shapely.ops.unary_union(polys))
+    msk_seg = LineString(segment).difference(shapely.ops.unary_union(polys))
     # TODO: cases where we might want to keep a point
     # - seg parallel to camera axis
     # - others?
@@ -753,7 +755,7 @@ def mask_segment(segment: np.ndarray, faces: np.ndarray) -> np.ndarray:
     elif msk_seg.geom_type == "LineString":
         return np.array([msk_seg.coords])
     elif msk_seg.geom_type == "MultiLineString":
-        output = np.array([np.array(l.coords) for l in msk_seg if l.length > 1e-14])
+        output = np.array([np.array(line.coords) for line in msk_seg if line.length > 1e-14])
         return np.empty(shape=(0, 2, 3)) if len(output) == 0 else output
 
 
@@ -897,7 +899,7 @@ def mask_segment_parallel(segment: np.ndarray, faces: np.ndarray) -> np.ndarray:
         p = Polygon(f[:, 0:2].round(decimals=14))
         if p.is_valid:
             polys.append(p)
-    msk_seg = asLineString(segment).difference(shapely.ops.unary_union(polys))
+    msk_seg = LineString(segment).difference(shapely.ops.unary_union(polys))
 
     geom_type = msk_seg.geom_type
     length = msk_seg.length
@@ -911,7 +913,9 @@ def mask_segment_parallel(segment: np.ndarray, faces: np.ndarray) -> np.ndarray:
     elif geom_type == "LineString":
         output = np.array([msk_seg.coords])
     elif geom_type == "MultiLineString":
-        output = np.array([np.array(l.coords) for l in msk_seg if l.length > 1e-14])
+        output = np.array(
+            [np.array(line.coords) for line in msk_seg.geoms if line.length > 1e-14]
+        )
         if len(output) == 0:
             output.shape = (0, 2, 3)
     else:

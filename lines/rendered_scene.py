@@ -5,14 +5,13 @@ import matplotlib.pyplot as plt
 import numpy as np
 import shapely.ops
 import svgwrite
-from shapely.geometry import MultiLineString, asMultiLineString
+from shapely.geometry import MultiLineString
 
 import lines
 
 
 class RenderedScene:
-    """
-    Instances of lines.RenderedScene are returned by the lines.Scene.render() function. They
+    """Instances of lines.RenderedScene are returned by the lines.Scene.render() function. They
     contain the rendered 2D vector data as well as intermediate 3D segments and faces. This
     class implements various display and export methods.
     """
@@ -53,7 +52,7 @@ class RenderedScene:
         :return: the MultiLineString object
         """
         if self._mls is None:
-            self._mls = asMultiLineString(self._vectors)
+            self._mls = MultiLineString(self._vectors.tolist())
         return self._mls
 
     def merge_lines(self) -> None:
@@ -61,7 +60,7 @@ class RenderedScene:
         Optimise the vector data using shapely.ops.linemerge(). This may be useful of the
         rendering is to be drawn by a plotter.
         """
-        tot_seg_count = len(self.mls)
+        tot_seg_count = len(self.mls.geoms)
         merged = shapely.ops.linemerge(self.mls)
         if merged.geom_type == "LineString":
             self._mls = MultiLineString([merged])
@@ -71,7 +70,7 @@ class RenderedScene:
             logging.warning(
                 f"inconsistent geom_type {merged.geom_type} returned by linemerge()"
             )
-        logging.info(f"optimized {tot_seg_count} to {len(self._mls)} line strings")
+        logging.info(f"optimized {tot_seg_count} to {len(self._mls.geoms)} line strings")
 
     def show(
         self,
@@ -121,7 +120,7 @@ class RenderedScene:
             highlighted_segments = []
         elif type(highlighted_segments) == int:
             highlighted_segments = [highlighted_segments]
-        for i, ls in enumerate(self.mls):
+        for i, ls in enumerate(self.mls.geoms):
             kwargs = {}
             if i in highlighted_segments:
                 kwargs = {"lw": 1.5}
@@ -160,7 +159,7 @@ class RenderedScene:
         """
         dwg = svgwrite.Drawing(file_name, size=(1000, 1000), profile="tiny", debug=False)
 
-        for line in self.mls:
+        for line in self.mls.geoms:
             dwg.add(
                 dwg.path(
                     "M"

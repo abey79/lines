@@ -6,7 +6,8 @@ purposes.
 import enum
 
 import numpy as np
-from shapely.geometry import Polygon, asLineString
+import tqdm
+from shapely.geometry import LineString, Polygon
 
 # noinspection PyProtectedMember
 from lines.math import ATOL, RTOL, _validate_shape
@@ -177,7 +178,7 @@ def mask_segments(segments: np.array, mask: np.array, diff: bool = True) -> np.a
 
     output = []
     for i in range(len(segments)):
-        ls = asLineString(segments[i, :, :])
+        ls = LineString(segments[i, :, :])
         res = getattr(ls, op)(poly)
 
         # segments with identical start/stop location are sometime returned
@@ -187,7 +188,7 @@ def mask_segments(segments: np.array, mask: np.array, diff: bool = True) -> np.a
         if res.geom_type == "LineString":
             output.append(np.array([res.coords]))
         elif res.geom_type == "MultiLineString":
-            output.append(np.array([np.array(l.coords) for l in res]))
+            output.append(np.array([np.array(line.coords) for line in res.geoms]))
 
     if output:
         res = np.vstack(output)
@@ -376,7 +377,9 @@ def render_v1(all_segments, all_faces) -> np.ndarray:
     )
     non_perp_idx = face_normals[:, 2] != 0
 
-    for (p0, p1, p2), n in zip(all_faces[non_perp_idx], face_normals[non_perp_idx]):
+    for (p0, p1, p2), n in tqdm.tqdm(
+        zip(all_faces[non_perp_idx], face_normals[non_perp_idx]), total=len(non_perp_idx)
+    ):
         # All segments strictly outside of the face (in 2D) can be left alone
         outside = segments_outside_triangle_2d(all_segments, np.array([p0, p1, p2]))
         segments_to_process = all_segments[~outside]

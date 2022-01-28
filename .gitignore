@@ -92,8 +92,5 @@ ENV/
 # OS stuff
 .DS_Store
 
-# SVG output
-*.svg
-
 # pycharm project
 .idea/
